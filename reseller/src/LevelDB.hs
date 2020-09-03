@@ -15,7 +15,7 @@ import Database.LevelDB (bloomFilter, createIfMissing, defaultOptions, delete, f
 
 -- | This is path for the Database location
 getDBPath :: String
-getDBPath = "/tmp/allpayproxy"
+getDBPath = "/tmp/reseller"
 
 -- | Returns Value from database corresponding to given key
 getValue :: (MonadUnliftIO m) => ByteString -> m (Maybe ByteString)
