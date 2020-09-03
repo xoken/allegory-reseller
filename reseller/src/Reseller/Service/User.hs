@@ -103,7 +103,7 @@ xGetUserByUsername name = do
                                         uFirstName
                                         uLastName
                                         uEmail
-                                        uRoles -- <$> (Q.fromSet roles))
+                                        uRoles
                                         (fromIntegral uApiQuota)
                                         (fromIntegral uApiUsed)
                                         uApiExpiryTime
@@ -118,7 +118,7 @@ xGetUserByUsername name = do
                                         uFirstName
                                         uLastName
                                         uEmail
-                                        uRoles -- (Q.fromSet roles))
+                                        uRoles
                                         (fromIntegral uApiQuota)
                                         (fromIntegral uApiUsed)
                                         uApiExpiryTime
@@ -286,70 +286,74 @@ login user pass = do
     dbe <- getDB
     lg <- getLogger
     bp2pEnv <- getBitcoinP2P
-    let conn = leveldb dbe
+    let lstate = leveldb dbe
         hashedPasswd = encodeHex ((S.encode $ sha256 pass))
-        str =
-            " SELECT password, api_quota, api_used, session_key, session_key_expiry_time, permissions FROM xoken.user_permission WHERE username = ? "
-        --qstr = str :: Q.QueryString Q.R (Identity DT.Text) (DT.Text, Int32, Int32, DT.Text, UTCTime, Set DT.Text)
-        --p = getSimpleQueryParam $ Identity $ user
-    res <- undefined -- liftIO $ try $ query conn (Q.RqQuery $ Q.Query qstr p)
+    res <- LE.try $ DL.get (db lstate) (readOptions lstate) (DTE.encodeUtf8 user)
     case res of
+        Right (Just iops) -> do
+            case eitherDecodeStrict iops of
+                Right u@User {..} -> do
+                    if (uHashedPassword /= DT.unpack hashedPasswd)
+                        then return $ AuthResp Nothing 0 0
+                        else do
+                            tm <- liftIO $ getCurrentTime
+                            newSessionKey <- liftIO $ generateSessionKey
+                            res1 <-
+                                LE.try $
+                                DL.put
+                                    (db lstate)
+                                    (writeOptions lstate)
+                                    (DTE.encodeUtf8 user)
+                                    (encodeStrict $
+                                     User
+                                         uUsername
+                                         uHashedPassword
+                                         uFirstName
+                                         uLastName
+                                         uEmail
+                                         uRoles
+                                         uApiQuota
+                                         uApiUsed
+                                         uApiExpiryTime
+                                         (DT.unpack newSessionKey)
+                                         tm)
+                            case res1 of
+                                Right _ -> do
+                                    userData <- liftIO $ H.lookup (userDataCache bp2pEnv) (DT.pack uSessionKey)
+                                    case userData of
+                                        Just (n, q, u, e, r) -> do
+                                            liftIO $ H.delete (userDataCache bp2pEnv) (DT.pack uSessionKey)
+                                            liftIO $
+                                                H.insert
+                                                    (userDataCache bp2pEnv)
+                                                    (newSessionKey)
+                                                    (n, q, u, (addUTCTime (nominalDay * 30) tm), r)
+                                            return $
+                                                AuthResp
+                                                    (Just $ DT.unpack newSessionKey)
+                                                    (fromIntegral u)
+                                                    (fromIntegral $ q - u)
+                                        Nothing -> do
+                                            liftIO $
+                                                H.insert
+                                                    (userDataCache bp2pEnv)
+                                                    (newSessionKey)
+                                                    ( (DT.pack uUsername)
+                                                    , (fromIntegral uApiQuota)
+                                                    , (fromIntegral uApiUsed)
+                                                    , (addUTCTime (nominalDay * 30) tm)
+                                                    , (DT.pack <$> uRoles))
+                                            return $
+                                                AuthResp
+                                                    (Just $ DT.unpack newSessionKey)
+                                                    (fromIntegral uApiUsed)
+                                                    (fromIntegral $ uApiQuota - uApiUsed)
+                                Left (SomeException e) -> do
+                                    err lg $ LG.msg $ "Error: UPDATE'ing into 'user_permission': " ++ show e
+                                    throw e
         Left (SomeException e) -> do
             err lg $ LG.msg $ "Error: SELECT'ing from 'user_permission': " ++ show e
             throw e
-        Right (op) -> do
-            if length op == 0
-                then return $ AuthResp Nothing 0 0
-                else do
-                    case (op !! 0) of
-                        (pw, quota, used, sk, _, roles) -> do
-                            if (pw /= hashedPasswd)
-                                then return $ AuthResp Nothing 0 0
-                                else do
-                                    tm <- liftIO $ getCurrentTime
-                                    newSessionKey <- liftIO $ generateSessionKey
-                                    let str1 =
-                                            "UPDATE xoken.user_permission SET session_key = ?, session_key_expiry_time = ? WHERE username = ? "
-                                        --qstr1 = str1 :: Q.QueryString Q.W (DT.Text, UTCTime, DT.Text) ()
-                                        --par1 =
-                                                --getSimpleQueryParam
-                                                --(newSessionKey, (addUTCTime (nominalDay * 30) tm), user)
-                                    res1 <- undefined -- liftIO $ try $ write conn (Q.RqQuery $ Q.Query (qstr1) par1)
-                                    case res1 of
-                                        Right _ -> do
-                                            userData <- liftIO $ H.lookup (userDataCache bp2pEnv) (sk)
-                                            case userData of
-                                                Just (n, q, u, e, r) -> do
-                                                    liftIO $ H.delete (userDataCache bp2pEnv) (sk)
-                                                    liftIO $
-                                                        H.insert
-                                                            (userDataCache bp2pEnv)
-                                                            (newSessionKey)
-                                                            (n, q, u, (addUTCTime (nominalDay * 30) tm), r)
-                                                    return $
-                                                        AuthResp
-                                                            (Just $ DT.unpack newSessionKey)
-                                                            (fromIntegral u)
-                                                            (fromIntegral $ q - u)
-                                                Nothing
-                                                    --liftIO $
-                                                        --H.insert
-                                                            --(userDataCache bp2pEnv)
-                                                            --(newSessionKey)
-                                                            --( user
-                                                            --, quota
-                                                            --, used
-                                                            --, (addUTCTime (nominalDay * 30) tm)
-                                                            --, Q.fromSet roles)
-                                                 -> do
-                                                    return $
-                                                        AuthResp
-                                                            (Just $ DT.unpack newSessionKey)
-                                                            (fromIntegral used)
-                                                            (fromIntegral $ quota - used)
-                                        Left (SomeException e) -> do
-                                            err lg $ LG.msg $ "Error: UPDATE'ing into 'user_permission': " ++ show e
-                                            throw e
 
 addNewUser ::
        ServerState
@@ -366,56 +370,49 @@ addNewUser lstate uname fname lname email roles api_quota api_expiry_time = do
     case opb of
         Just ops ->
             case eitherDecodeStrict ops of
-                Right (op :: [User]) -> do
+                Right User {..} -> do
                     tm <- liftIO $ getCurrentTime
-                    if L.length op == 1
-                        then return Nothing
-                        else do
-                            g <- liftIO $ newStdGen
-                            let seed = show $ fst (random g :: (Word64, StdGen))
-                                passwd = B.init $ B.init $ B64.encode $ BC.pack $ seed
-                                hashedPasswd = encodeHex ((S.encode $ sha256 passwd))
-                                tempSessionKey = encodeHex ((S.encode $ sha256 $ B.reverse passwd))
-                                par =
-                                    User
-                                        uname
-                                        (DT.unpack hashedPasswd)
-                                        fname
-                                        lname
-                                        email
-                                        (fromMaybe ["read"] roles)
-                                        (maybe 10000 fromEnum api_quota)
-                                        0
-                                        (fromMaybe (addUTCTime (nominalDay * 365) tm) api_expiry_time)
-                                        (DT.unpack tempSessionKey)
-                                        (addUTCTime (nominalDay * 30) tm)
-                            res1 <-
-                                LE.try $
-                                DL.put
-                                    (db lstate)
-                                    (writeOptions lstate)
-                                    (DTE.encodeUtf8 $ DT.pack uname)
-                                    (encodeStrict par)
-                            case res1 of
-                                Right _ -> do
-                                    putStrLn $ "Added user: " ++ uname
-                                    return $
-                                        Just $
-                                        AddUserResp
-                                            (User
-                                                 uname
-                                                 ""
-                                                 fname
-                                                 lname
-                                                 email
-                                                 (fromMaybe ["read"] roles)
-                                                 (fromIntegral $ fromMaybe 10000 api_quota)
-                                                 0
-                                                 (fromMaybe (addUTCTime (nominalDay * 365) tm) api_expiry_time)
-                                                 (maskAfter 10 $ DT.unpack tempSessionKey)
-                                                 (addUTCTime (nominalDay * 30) tm))
-                                            (BC.unpack passwd)
-                                Left (SomeException e) -> do
-                                    putStrLn $ "Error: INSERTing into 'user_permission': " ++ show e
-                                    throw e
+                    g <- liftIO $ newStdGen
+                    let seed = show $ fst (random g :: (Word64, StdGen))
+                        passwd = B.init $ B.init $ B64.encode $ BC.pack $ seed
+                        hashedPasswd = encodeHex ((S.encode $ sha256 passwd))
+                        tempSessionKey = encodeHex ((S.encode $ sha256 $ B.reverse passwd))
+                        par =
+                            User
+                                uname
+                                (DT.unpack hashedPasswd)
+                                fname
+                                lname
+                                email
+                                (fromMaybe ["read"] roles)
+                                (maybe 10000 fromEnum api_quota)
+                                0
+                                (fromMaybe (addUTCTime (nominalDay * 365) tm) api_expiry_time)
+                                (DT.unpack tempSessionKey)
+                                (addUTCTime (nominalDay * 30) tm)
+                    res1 <-
+                        LE.try $
+                        DL.put (db lstate) (writeOptions lstate) (DTE.encodeUtf8 $ DT.pack uname) (encodeStrict par)
+                    case res1 of
+                        Right _ -> do
+                            putStrLn $ "Added user: " ++ uname
+                            return $
+                                Just $
+                                AddUserResp
+                                    (User
+                                         uname
+                                         ""
+                                         fname
+                                         lname
+                                         email
+                                         (fromMaybe ["read"] roles)
+                                         (fromIntegral $ fromMaybe 10000 api_quota)
+                                         0
+                                         (fromMaybe (addUTCTime (nominalDay * 365) tm) api_expiry_time)
+                                         (maskAfter 10 $ DT.unpack tempSessionKey)
+                                         (addUTCTime (nominalDay * 30) tm))
+                                    (BC.unpack passwd)
+                        Left (SomeException e) -> do
+                            putStrLn $ "Error: INSERTing into 'user_permission': " ++ show e
+                            throw e
         Nothing -> return Nothing
