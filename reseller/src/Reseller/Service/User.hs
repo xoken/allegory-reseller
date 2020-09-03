@@ -137,7 +137,6 @@ xDeleteUserByUsername name = do
     lg <- getLogger
     bp2pEnv <- getBitcoinP2P
     let lstate = leveldb dbe
-        str = "DELETE FROM xoken.user_permission WHERE username=?"
     res <- LE.try $ DL.get (db lstate) (readOptions lstate) (DTE.encodeUtf8 name)
     case res of
         Right (Just _) -> do
@@ -237,60 +236,47 @@ xGetUserBySessionKey skey = do
     dbe <- getDB
     lg <- getLogger
     bp2pEnv <- getBitcoinP2P
-    let conn = leveldb dbe
-        str =
-            "SELECT username,first_name,last_name,emailid,permissions,api_quota,api_used,api_expiry_time,session_key,session_key_expiry_time from xoken.user_permission where session_key = ? ALLOW FILTERING "
-        --qstr =
-            --str :: Q.QueryString Q.R (Identity DT.Text) ( DT.Text
-                                                        --, DT.Text
-                                                        --, DT.Text
-                                                        --, DT.Text
-                                                        --, Set DT.Text
-                                                        --, Int32
-                                                        --, Int32
-                                                        --, UTCTime
-                                                        --, DT.Text
-                                                        --, UTCTime)
-        --p = getSimpleQueryParam $ Identity skey
-    res <- undefined -- liftIO $ LE.try $ query conn (Q.RqQuery $ Q.Query qstr p)
+    let lstate = leveldb dbe
+    res <- LE.try $ DL.get (db lstate) (readOptions lstate) (DTE.encodeUtf8 skey)
     case res of
-        Right iop -> do
-            if length iop == 0
-                then return Nothing
-                else do
-                    let (uname, fname, lname, email, roles, apiQ, apiU, apiE, sk, skE) = iop !! 0
-                    userData <- liftIO $ H.lookup (userDataCache bp2pEnv) (sk)
+        Right (Just iops) -> do
+            case eitherDecodeStrict iops of
+                Right User {..} -> do
+                    userData <- liftIO $ H.lookup (userDataCache bp2pEnv) (DT.pack uSessionKey)
                     case userData of
                         Just (_, _, used, _, _) ->
                             return $
                             Just $
                             User
-                                (DT.unpack uname)
-                                (DT.unpack "")
-                                (DT.unpack fname)
-                                (DT.unpack lname)
-                                (DT.unpack email)
-                                ([DT.unpack ""]) -- <$> (Q.fromSet roles))
-                                (fromIntegral apiQ)
-                                (fromIntegral used)
-                                apiE
-                                (maskAfter 10 $ DT.unpack sk)
-                                skE
+                                uUsername
+                                ""
+                                uFirstName
+                                uLastName
+                                uEmail
+                                uRoles
+                                (fromIntegral uApiQuota)
+                                (fromIntegral uApiUsed)
+                                uApiExpiryTime
+                                (maskAfter 10 uSessionKey)
+                                uSessionKeyExpiry
                         Nothing ->
                             return $
                             Just $
                             User
-                                (DT.unpack uname)
-                                (DT.unpack "")
-                                (DT.unpack fname)
-                                (DT.unpack lname)
-                                (DT.unpack email)
-                                ([DT.unpack ""]) -- <$> (Q.fromSet roles))
-                                (fromIntegral apiQ)
-                                (fromIntegral apiU)
-                                apiE
-                                (maskAfter 10 $ DT.unpack sk)
-                                skE
+                                uUsername
+                                ""
+                                uFirstName
+                                uLastName
+                                uEmail
+                                uRoles
+                                (fromIntegral uApiQuota)
+                                (fromIntegral uApiUsed)
+                                uApiExpiryTime
+                                (maskAfter 10 uSessionKey)
+                                uSessionKeyExpiry
+                Left e -> do
+                    err lg $ LG.msg $ "Error: xGetUserBySessionKey: " ++ e
+                    throw KeyValueDBLookupException
         Left (e :: SomeException) -> do
             err lg $ LG.msg $ "Error: xGetUserBySessionKey: " ++ show e
             throw KeyValueDBLookupException
