@@ -35,6 +35,7 @@ data NodeConfig =
         , tlsKeyfilePath :: FilePath
         , tlsCertificateStorePath :: FilePath
         , defaultSathosi :: Int
+        , levelDBPath :: FilePath
         }
     deriving (Show, Generic)
 

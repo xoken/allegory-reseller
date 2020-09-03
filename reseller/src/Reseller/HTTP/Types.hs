@@ -14,6 +14,7 @@ import qualified Control.Exception as CE
 import Control.Lens (makeLenses)
 import qualified Control.Monad.Catch as MC
 import Control.Monad.IO.Class
+import Control.Monad.IO.Unlift
 import Control.Monad.Reader
 import Control.Monad.State.Class
 import Control.Monad.Trans.Control
@@ -40,9 +41,6 @@ data App =
 instance HasBitcoinP2P (Handler App App) where
     getBitcoinP2P = bitcoinP2PEnv <$> gets _env
 
-instance HasDatabaseHandles (Handler App App) where
-    getDB = dbHandles <$> gets _env
-
 instance HasAllegoryEnv (Handler App App) where
     getAllegory = allegoryEnv <$> gets _env
 
@@ -51,6 +49,8 @@ instance HasLogger (Handler App App) where
 
 instance MC.MonadThrow (Handler App App) where
     throwM = liftIO . CE.throwIO
+
+instance MonadUnliftIO (Handler App App) --where
 
 -- Request & Response Types
 --

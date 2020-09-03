@@ -18,7 +18,6 @@ import qualified Data.Map.Strict as M
 import Data.Text
 import Data.Time.Clock
 import Data.Word
-import Database.LevelDB
 import GHC.Generics
 import NodeConfig
 import Prelude
@@ -27,20 +26,13 @@ import System.Logger
 type HashTable k v = H.BasicHashTable k v
 
 type HasResellerEnv env m
-     = ( HasBitcoinP2P m
-       , HasDatabaseHandles m
-       , HasLogger m
-       , HasAllegoryEnv m
-       , MonadReader env m
-       , MonadBaseControl IO m
-       , MonadThrow m)
+     = (HasBitcoinP2P m, HasLogger m, HasAllegoryEnv m, MonadReader env m, MonadBaseControl IO m, MonadThrow m)
 
 data ResellerEnv =
     ResellerEnv
         { loggerEnv :: !Logger
         , bitcoinP2PEnv :: !BitcoinP2P
         , allegoryEnv :: !AllegoryEnv
-        , dbHandles :: !DatabaseHandles
         }
 
 data BitcoinP2P =
@@ -54,18 +46,6 @@ data AllegoryEnv =
         { allegorySecretKey :: !SecKey
         }
 
-data DatabaseHandles =
-    DatabaseHandles
-        { leveldb :: !ServerState
-        }
-
-data ServerState =
-    ServerState
-        { writeOptions :: !WriteOptions
-        , readOptions :: !ReadOptions
-        , db :: !DB
-        }
-
 class HasBitcoinP2P m where
     getBitcoinP2P :: m (BitcoinP2P)
 
@@ -74,6 +54,3 @@ class HasLogger m where
 
 class HasAllegoryEnv m where
     getAllegory :: m (AllegoryEnv)
-
-class HasDatabaseHandles m where
-    getDB :: m (DatabaseHandles)

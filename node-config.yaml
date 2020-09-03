@@ -17,3 +17,5 @@ tlsKeyfilePath : ./example.key
 tlsCertificateStorePath : ./
 
 defaultSathosi: 199
+
+levelDBPath: ./leveldb

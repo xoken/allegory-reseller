@@ -50,11 +50,8 @@ authClient _ = throwBadRequest
 
 addUser :: ReqParams' -> Handler App App ()
 addUser AddUser {..} = do
-    dbe <- getDB
     pretty <- (maybe True (read . DT.unpack . DTE.decodeUtf8)) <$> (getQueryParam "pretty")
-    let lstate = leveldb dbe
-    resp <-
-        LE.try $ return $ addNewUser lstate auUsername auFirstName auLastName auEmail auRoles auApiQuota auApiExpiryTime
+    resp <- LE.try $ return $ addNewUser auUsername auFirstName auLastName auEmail auRoles auApiQuota auApiExpiryTime
     case resp of
         Left (e :: SomeException) -> do
             modifyResponse $ setResponseStatus 500 "Internal Server Error"
@@ -182,9 +179,7 @@ parseAuthorizationHeader bs =
 testAuthHeader :: ResellerEnv -> Maybe B.ByteString -> Maybe String -> IO Bool
 testAuthHeader _ Nothing _ = pure False
 testAuthHeader env (Just sessionKey) role = do
-    let lstate = leveldb $ dbHandles env
-        conn = db lstate
-        lg = loggerEnv env
+    let lg = loggerEnv env
         bp2pEnv = bitcoinP2PEnv env
         sKey = DT.pack $ S.unpack sessionKey
     userData <- liftIO $ H.lookup (userDataCache bp2pEnv) sKey

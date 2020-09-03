@@ -26,6 +26,7 @@ source-repository head
 executable reseller
   main-is: Main.hs
   other-modules:
+                 LevelDB
                  NodeConfig
                  Paths_reseller
                  Reseller.Env
@@ -69,6 +70,7 @@ executable reseller
     , time
     , transformers
     , unliftio
+    , unliftio-core
     , unordered-containers
     , vector
     , wai

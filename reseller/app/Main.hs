@@ -74,7 +74,7 @@ import Data.Typeable
 import Data.Version
 import Data.Word (Word32)
 import Data.Word
-import Database.LevelDB
+import qualified LevelDB as DL
 import Network.Simple.TCP
 import Network.Socket
 import NodeConfig
@@ -83,6 +83,8 @@ import Paths_reseller as P
 import Prelude as P
 import Reseller.Env
 import Reseller.HTTP.Server
+import Reseller.HTTP.Types
+import Reseller.Service.User
 import qualified Snap as Snap
 import StmContainers.Map as SM
 import System.Directory (doesDirectoryExist, doesFileExist)
@@ -105,14 +107,10 @@ instance Exception ConfigException
 
 type HashTable k v = H.BasicHashTable k v
 
-runThreads :: NodeConfig -> LG.Logger -> [FilePath] -> IO ()
-runThreads nodeConf lg certPaths = do
-    dbe <- runResourceT $ open "data/leveldb" defaultOptions
-    udc <- H.new
+runThreads :: NodeConfig -> BitcoinP2P -> LG.Logger -> [FilePath] -> IO ()
+runThreads nodeConf bitcoinP2PEnv lg certPaths = do
     let allegoryEnv = AllegoryEnv $ allegoryVendorSecretKey nodeConf
-    let bitcoinP2PEnv = BitcoinP2P nodeConf udc
-    let dbHandles = DatabaseHandles $ ServerState defaultWriteOptions defaultReadOptions dbe
-    let xknEnv = ResellerEnv lg bitcoinP2PEnv allegoryEnv dbHandles
+    let xknEnv = ResellerEnv lg bitcoinP2PEnv allegoryEnv
     -- start HTTP endpoint
     let snapConfig =
             Snap.defaultConfig & Snap.setSSLBind (DTE.encodeUtf8 $ DT.pack $ endPointHTTPSListenIP nodeConf) &
@@ -122,19 +120,21 @@ runThreads nodeConf lg certPaths = do
             Snap.setSSLChainCert False
     Snap.serveSnaplet snapConfig (appInit xknEnv)
 
-runNode :: NodeConfig -> [FilePath] -> IO ()
-runNode nodeConf certPaths = do
+runNode :: NodeConfig -> BitcoinP2P -> [FilePath] -> IO ()
+runNode nodeConf bitcoinP2PEnv certPaths = do
     lg <-
         LG.new
             (LG.setOutput
                  (LG.Path $ T.unpack $ logFileName nodeConf)
                  (LG.setLogLevel (logLevel nodeConf) LG.defSettings))
-    runThreads nodeConf lg certPaths
+    runThreads nodeConf bitcoinP2PEnv lg certPaths
 
 initReseller :: IO ()
 initReseller = do
     putStrLn $ "Starting Reseller"
     nodeCnf <- readConfig "node-config.yaml"
+    udc <- H.new
+    let bitcoinP2PEnv = BitcoinP2P nodeCnf udc
     let certFP = tlsCertificatePath nodeCnf
         keyFP = tlsKeyfilePath nodeCnf
         csrFP = tlsCertificateStorePath nodeCnf
@@ -142,8 +142,32 @@ initReseller = do
     kfp <- doesFileExist keyFP
     csfp <- doesDirectoryExist csrFP
     unless (cfp && kfp && csfp) $ P.error "Error: missing TLS certificate or keyfile"
+    defaultAdminUser
     -- launch node --
-    runNode nodeCnf [certFP, keyFP, csrFP]
+    runNode nodeCnf bitcoinP2PEnv [certFP, keyFP, csrFP]
+
+defaultAdminUser :: IO ()
+defaultAdminUser = do
+    op <- DL.getValue (DTE.encodeUtf8 "admin")
+    putStrLn $ "Starting Reseller"
+    case op of
+        Just _ -> return ()
+        Nothing -> do
+            tm <- liftIO $ getCurrentTime
+            usr <-
+                addNewUser
+                    "admin"
+                    "default"
+                    "user"
+                    ""
+                    (Just ["admin"])
+                    (Just 100000000)
+                    (Just (addUTCTime (nominalDay * 365) tm))
+            putStrLn $ "******************************************************************* "
+            putStrLn $ "  Creating default Admin user!"
+            putStrLn $ "  Please note down admin password NOW, will not be shown again."
+            putStrLn $ "  Password : " ++ (aurPassword $ fromJust usr)
+            putStrLn $ "******************************************************************* "
 
 relaunch :: IO ()
 relaunch =
@@ -159,4 +183,5 @@ relaunch =
 main :: IO ()
 main = do
     let pid = "/tmp/nexa.pid.0"
-    runDetached (Just pid) (ToFile "nexa.log") relaunch
+    initReseller
+    --runDetached (Just pid) (ToFile "nexa.log") relaunch
