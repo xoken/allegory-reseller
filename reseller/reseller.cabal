@@ -1,0 +1,115 @@
+cabal-version: 2.0
+
+
+name:           reseller
+version:        0.1
+synopsis:       Storage and index for Allpay Names
+description:    Store reseller configs, names available, and make that information via REST API.
+category:       Bitcoin, Finance, Network
+homepage:       http://github.com/xoken/reseller#readme
+bug-reports:    http://github.com/xoken/reseller/issues
+author:         aravind
+maintainer:     aravind
+license:        PublicDomain
+license-file:   UNLICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/xoken/reseller.git
+
+
+
+executable reseller
+  main-is: Main.hs
+  other-modules:
+                 NodeConfig
+                 Paths_reseller
+                 Reseller.Env
+                 Reseller.HTTP.Handler
+                 Reseller.HTTP.Server
+                 Reseller.HTTP.Types
+                 Reseller.Service.User
+                 Reseller.Common
+
+  ghc-options:  -fprof-auto -fprof-cafs -rtsopts -O2 -threaded -with-rtsopts=-N
+  hs-source-dirs:
+      app, src
+
+  build-depends:
+      aeson
+    , aeson-pretty
+    , base >=4.9 && <5
+    , bytestring
+    , cereal
+    , conduit
+    , containers
+    , cryptonite
+    , data-default
+    , errors
+    , filepath
+    , hashable
+    , hashable-time
+    , http-types
+    , leveldb-haskell
+    , monad-logger
+    , mtl
+    , network
+    , nqe
+    , optparse-applicative
+    , random
+    , regex-tdfa
+    , resourcet
+    , scotty
+    , string-conversions
+    , text
+    , time
+    , transformers
+    , unliftio
+    , unordered-containers
+    , vector
+    , wai
+    , warp
+    , network-simple
+    , monad-loops
+    , xoken-core
+    , binary
+    , zlib
+    , utf8-string
+    , base64-bytestring
+    , base16-bytestring
+    , extra
+    , serialise
+    , lifted-async
+    , stm
+    , string-conv
+    , stm-containers
+    , directory
+    , transformers-base
+    , exceptions
+    , monad-control
+    , cql-io
+    , tinylog
+    , async
+    , streamly
+    , lifted-base
+    , hasbolt >=0.1.3.6
+    , resource-pool
+    , cql
+    , hashtables
+    , base16-bytestring
+    , SafeSemaphore
+    , yaml
+    , secp256k1-haskell
+    , concurrent-extra
+    , tls
+    , x509-store
+    , network-simple-tls
+    , vformat
+    , daemons
+    , snap
+    , lens
+  default-language: Haskell2010
