@@ -29,12 +29,13 @@ executable reseller
                  LevelDB
                  NodeConfig
                  Paths_reseller
+                 Reseller.Common
                  Reseller.Env
                  Reseller.HTTP.Handler
                  Reseller.HTTP.Server
                  Reseller.HTTP.Types
                  Reseller.Service.User
-                 Reseller.Common
+                 Reseller.Service.Xoken
 
   ghc-options:  -fprof-auto -fprof-cafs -rtsopts -O2 -threaded -with-rtsopts=-N
   hs-source-dirs:
@@ -64,6 +65,7 @@ executable reseller
     , random
     , regex-tdfa
     , resourcet
+    , req
     , scotty
     , string-conversions
     , text

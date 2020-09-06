@@ -20,15 +20,19 @@ import Control.Monad.State.Class
 import Control.Monad.Trans.Control
 import Crypto.Secp256k1
 import Data.Aeson
+import Data.ByteString
+import Data.ByteString.Base64 as B64
 import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Data.Char as Char
 import qualified Data.HashTable.IO as H
 import Data.Int
 import qualified Data.Map.Strict as M
 import Data.Text
+import qualified Data.Text.Encoding as T
 import Data.Time.Clock
 import Data.Word
 import GHC.Generics
+import Network.HTTP.Req
 import Prelude
 import Reseller.Env
 import Snap
@@ -51,6 +55,9 @@ instance MC.MonadThrow (Handler App App) where
     throwM = liftIO . CE.throwIO
 
 instance MonadUnliftIO (Handler App App) --where
+
+instance MonadHttp (Handler App App) where
+    handleHttpException = MC.throwM
 
 -- Request & Response Types
 --
@@ -89,6 +96,12 @@ data ReqParams'
           { uuUsername :: String
           , uuUpdateData :: UpdateUserByUsername'
           }
+    | GetPartiallySignedAllegoryTx
+          { gpsaPaymentInputs :: [(OutPoint', Int)]
+          , gpsaName :: ([Int], Bool) -- name & isProducer
+          , gpsaOutputOwner :: String
+          , gpsaOutputChange :: String
+          }
     deriving (Generic, Show, Eq, Serialise, ToJSON)
 
 instance FromJSON ReqParams' where
@@ -98,7 +111,9 @@ instance FromJSON ReqParams' where
          o .: "email" <*>
          o .:? "roles") <|>
         (UserByUsername <$> o .: "username") <|>
-        (UpdateUserByUsername <$> o .: "username" <*> o .: "updateData")
+        (UpdateUserByUsername <$> o .: "username" <*> o .: "updateData") <|>
+        (GetPartiallySignedAllegoryTx <$> o .: "paymentInputs" <*> o .: "name" <*> o .: "outputOwner" <*>
+         o .: "outputChange")
 
 data ResponseBody
     = AuthenticateResp
@@ -110,12 +125,21 @@ data ResponseBody
     | RespUser
           { user :: Maybe User
           }
+    | RespPartiallySignedAllegoryTx
+          { psaTx :: ByteString
+          }
     deriving (Generic, Show, Eq, Serialise)
 
 instance ToJSON ResponseBody where
     toJSON (AuthenticateResp a) = object ["auth" .= a]
     toJSON (RespAddUser usr) = object ["user" .= usr]
     toJSON (RespUser u) = object ["user" .= u]
+    toJSON (RespPartiallySignedAllegoryTx ps) = object ["psaTx" .= (T.decodeUtf8 . B64.encode $ ps)]
+
+instance FromJSON ResponseBody where
+    parseJSON (Object o) =
+        (AuthenticateResp <$> o .: "auth") <|> (RespAddUser <$> o .: "user") <|> (RespUser <$> o .: "user") <|>
+        (RespPartiallySignedAllegoryTx <$> o .: "psaTx")
 
 data UpdateUserByUsername' =
     UpdateUserByUsername'
@@ -142,14 +166,14 @@ data AuthResp =
         , callsUsed :: Int
         , callsRemaining :: Int
         }
-    deriving (Generic, Show, Eq, Serialise, ToJSON)
+    deriving (Generic, Show, Eq, Serialise, ToJSON, FromJSON)
 
 data AddUserResp =
     AddUserResp
         { aurUser :: User
         , aurPassword :: String
         }
-    deriving (Generic, Show, Eq, Serialise)
+    deriving (Generic, Show, Eq, Serialise, FromJSON)
 
 instance ToJSON AddUserResp where
     toJSON (AddUserResp (User uname _ fname lname email roles apiQuota _ apiExpTime _ _) pwd) =
@@ -199,5 +223,12 @@ instance FromJSON User where
                            let (h:t) = x
                             in "u" <> (Char.toUpper h : t)
                  })
+
+data OutPoint' =
+    OutPoint'
+        { opTxHash :: String
+        , opIndex :: Int32
+        }
+    deriving (Show, Generic, Eq, Serialise, FromJSON, ToJSON)
 
 makeLenses ''App

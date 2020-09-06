@@ -34,6 +34,7 @@ import Reseller.Common
 import Reseller.Env
 import Reseller.HTTP.Types
 import Reseller.Service.User
+import Reseller.Service.Xoken
 import Snap
 import qualified System.Logger as LG
 
@@ -113,6 +114,18 @@ updateUserByUsername updates = do
             modifyResponse $ setResponseStatus 200 "Updated"
             writeBS $ "User updated"
         Right False -> throwNotFound
+
+getPartiallySignedAllegoryTx :: ReqParams' -> Handler App App ()
+getPartiallySignedAllegoryTx GetPartiallySignedAllegoryTx {..} = do
+    pretty <- (maybe True (read . DT.unpack . DTE.decodeUtf8)) <$> (getQueryParam "pretty")
+    res <- LE.try $ xGetPartiallySignedAllegoryTx gpsaPaymentInputs gpsaName gpsaOutputOwner gpsaOutputChange
+    case res of
+        Left (e :: SomeException) -> do
+            modifyResponse $ setResponseStatus 500 "Internal Server Error"
+            writeBS "INTERNAL_SERVER_ERROR"
+        Right ops -> do
+            writeBS $ BSL.toStrict $ encodeResp pretty $ RespPartiallySignedAllegoryTx ops
+getPartiallySignedAllegoryTx _ = throwBadRequest
 
 --- |
 -- Helper functions

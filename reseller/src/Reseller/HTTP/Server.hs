@@ -22,4 +22,5 @@ apiRoutes =
     , ("/v1/user/:username", method DELETE (withAuthAs "admin" deleteUserByUsername))
     , ("/v1/user/:username", method PUT (withAuthAs "admin" $ withReq updateUserByUsername))
     , ("/v1/user/", method GET (withAuth getCurrentUser))
+    , ("/v1/partialsign", method POST (withAuth $ withReq getPartiallySignedAllegoryTx))
     ]
