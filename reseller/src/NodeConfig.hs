@@ -35,6 +35,8 @@ data NodeConfig =
         , tlsKeyfilePath :: FilePath
         , tlsCertificateStorePath :: FilePath
         , defaultSathosi :: Int
+        , xokenListenIP :: String
+        , xokenListenPort :: PortNumber
         }
     deriving (Show, Generic)
 

@@ -11,25 +11,45 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Control
 import Data.Aeson
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.Text as DT
 import Network.HTTP.Req
+import NodeConfig
 import Prelude
 import Reseller.HTTP.Types
 
 xGetPartiallySignedAllegoryTx ::
        (MonadIO m, MonadHttp m, MonadBaseControl IO m)
-    => [(OutPoint', Int)]
+    => NodeConfig
+    -> [(OutPoint', Int)]
     -> ([Int], Bool)
     -> (String)
     -> (String)
     -> m (BC.ByteString)
-xGetPartiallySignedAllegoryTx payips np owner change = do
+xGetPartiallySignedAllegoryTx nodeCnf payips np owner change = do
     resp <-
         req
             POST
-            (https "000.00.00.000")
+            (https (DT.pack $ xokenListenIP nodeCnf))
             (ReqBodyJson (GetPartiallySignedAllegoryTx payips np owner change))
             bsResponse
-            mempty
+            ((port $ fromEnum $ xokenListenPort nodeCnf) <> mempty)
     case eitherDecodeStrict $ responseBody resp of
-        Right (RespPartiallySignedAllegoryTx pis) -> undefined
+        Right (RespPartiallySignedAllegoryTx pis)
+          -- for the intermediate tx, call relayTx (parallel)
+          -- return the final partially signed tx
+         -> do
+            undefined
+        Left err -> undefined
+
+xRelayTx :: (MonadHttp m, MonadIO m, MonadBaseControl IO m) => NodeConfig -> BC.ByteString -> m (Bool)
+xRelayTx nodeCnf rawTx = do
+    resp <-
+        req
+            POST
+            (https (DT.pack $ xokenListenIP nodeCnf))
+            (ReqBodyJson (RelayTx rawTx))
+            bsResponse
+            (port $ fromEnum $ xokenListenPort nodeCnf)
+    case eitherDecodeStrict $ responseBody resp of
+        Right (RespRelayTx b) -> undefined
         Left err -> undefined

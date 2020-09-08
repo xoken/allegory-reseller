@@ -17,3 +17,7 @@ tlsKeyfilePath : ./example.key
 tlsCertificateStorePath : ./
 
 defaultSathosi: 199
+
+xokenListenIP: 127.0.0.1
+
+xokenListenPort: 9090

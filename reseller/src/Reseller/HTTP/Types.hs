@@ -102,6 +102,9 @@ data ReqParams'
           , gpsaOutputOwner :: String
           , gpsaOutputChange :: String
           }
+    | RelayTx
+          { rTx :: ByteString
+          }
     deriving (Generic, Show, Eq, Serialise, ToJSON)
 
 instance FromJSON ReqParams' where
@@ -113,7 +116,8 @@ instance FromJSON ReqParams' where
         (UserByUsername <$> o .: "username") <|>
         (UpdateUserByUsername <$> o .: "username" <*> o .: "updateData") <|>
         (GetPartiallySignedAllegoryTx <$> o .: "paymentInputs" <*> o .: "name" <*> o .: "outputOwner" <*>
-         o .: "outputChange")
+         o .: "outputChange") <|>
+        (RelayTx . B64.decodeLenient . T.encodeUtf8 <$> o .: "rawTx")
 
 data ResponseBody
     = AuthenticateResp
@@ -128,6 +132,9 @@ data ResponseBody
     | RespPartiallySignedAllegoryTx
           { psaTx :: ByteString
           }
+    | RespRelayTx
+          { rrTx :: Bool
+          }
     deriving (Generic, Show, Eq, Serialise)
 
 instance ToJSON ResponseBody where
@@ -135,11 +142,13 @@ instance ToJSON ResponseBody where
     toJSON (RespAddUser usr) = object ["user" .= usr]
     toJSON (RespUser u) = object ["user" .= u]
     toJSON (RespPartiallySignedAllegoryTx ps) = object ["psaTx" .= (T.decodeUtf8 . B64.encode $ ps)]
+    toJSON (RespRelayTx rrTx) = object ["txBroadcast" .= rrTx]
 
 instance FromJSON ResponseBody where
     parseJSON (Object o) =
         (AuthenticateResp <$> o .: "auth") <|> (RespAddUser <$> o .: "user") <|> (RespUser <$> o .: "user") <|>
-        (RespPartiallySignedAllegoryTx <$> o .: "psaTx")
+        (RespPartiallySignedAllegoryTx <$> o .: "psaTx") <|>
+        (RespRelayTx <$> o .: "txBroadcast")
 
 data UpdateUserByUsername' =
     UpdateUserByUsername'

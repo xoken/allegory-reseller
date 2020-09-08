@@ -118,7 +118,10 @@ updateUserByUsername updates = do
 getPartiallySignedAllegoryTx :: ReqParams' -> Handler App App ()
 getPartiallySignedAllegoryTx GetPartiallySignedAllegoryTx {..} = do
     pretty <- (maybe True (read . DT.unpack . DTE.decodeUtf8)) <$> (getQueryParam "pretty")
-    res <- LE.try $ xGetPartiallySignedAllegoryTx gpsaPaymentInputs gpsaName gpsaOutputOwner gpsaOutputChange
+    bp2pEnv <- getBitcoinP2P
+    res <-
+        LE.try $
+        xGetPartiallySignedAllegoryTx (nodeConfig bp2pEnv) gpsaPaymentInputs gpsaName gpsaOutputOwner gpsaOutputChange
     case res of
         Left (e :: SomeException) -> do
             modifyResponse $ setResponseStatus 500 "Internal Server Error"
