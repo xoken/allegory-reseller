@@ -5,6 +5,13 @@
 
 packages:
 - completed:
+    hackage: cryptocipher-0.6.2@sha256:b24531e611baf5db5130e056ac8c619b94fce1a7807d97faad4c609fe2abb70b,1103
+    pantry-tree:
+      size: 213
+      sha256: 0da6a58dff753dc6d707b5d1e25b68c7f80c52661529f0637c3c0d83ba73d269
+  original:
+    hackage: cryptocipher-0.6.2
+- completed:
     hackage: serialise-0.2.0.0@sha256:6ee31f26c0f53874caa9db07d94de4cf3d2200116a272d582f3e03e456fe78f3,9092
     pantry-tree:
       size: 4407

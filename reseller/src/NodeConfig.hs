@@ -30,7 +30,7 @@ data NodeConfig =
         , logFileName :: T.Text
         , endPointHTTPSListenIP :: String
         , endPointHTTPSListenPort :: PortNumber
-        , allegoryVendorSecretKey :: SecKey
+        , encryptedSeed :: ByteString
         , tlsCertificatePath :: FilePath
         , tlsKeyfilePath :: FilePath
         , tlsCertificateStorePath :: FilePath
@@ -41,7 +41,7 @@ data NodeConfig =
     deriving (Show, Generic)
 
 instance FromJSON ByteString where
-    parseJSON = withText "ByteString" $ \t -> pure $ fromJust (decodeHex t)
+    parseJSON = withText "ByteString" $ \t -> pure (E.encodeUtf8 t)
 
 instance FromJSON PortNumber where
     parseJSON v = fromInteger <$> parseJSON v
@@ -61,7 +61,7 @@ readConfig :: FilePath -> IO NodeConfig
 readConfig path = do
     config <- decodeFileEither path :: IO (Either ParseException NodeConfig)
     case config of
-        Left e -> throw e
+        Left e -> print e *> throw e
         Right con -> return con
 
 -- | Decode string of human-readable hex characters.

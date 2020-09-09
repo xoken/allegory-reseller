@@ -37,6 +37,11 @@ import Control.Monad.Reader
 import qualified Control.Monad.STM as CMS (atomically)
 import Control.Monad.Trans.Control
 import Control.Monad.Trans.Maybe
+import Crypto.Cipher.AES
+import Crypto.Cipher.Types
+import Crypto.Error
+import Crypto.KDF.Scrypt (Parameters(..), generate)
+import Crypto.Secp256k1
 import Data.Aeson.Encoding (encodingToLazyByteString, fromEncoding)
 import Data.Bits
 import qualified Data.ByteString as B
@@ -107,9 +112,9 @@ instance Exception ConfigException
 
 type HashTable k v = H.BasicHashTable k v
 
-runThreads :: NodeConfig -> BitcoinP2P -> LG.Logger -> [FilePath] -> IO ()
-runThreads nodeConf bitcoinP2PEnv lg certPaths = do
-    let allegoryEnv = AllegoryEnv $ allegoryVendorSecretKey nodeConf
+runThreads :: SecKey -> NodeConfig -> BitcoinP2P -> LG.Logger -> [FilePath] -> IO ()
+runThreads allSecKey nodeConf bitcoinP2PEnv lg certPaths = do
+    let allegoryEnv = AllegoryEnv allSecKey
     let xknEnv = ResellerEnv lg bitcoinP2PEnv allegoryEnv
     -- start HTTP endpoint
     let snapConfig =
@@ -120,19 +125,21 @@ runThreads nodeConf bitcoinP2PEnv lg certPaths = do
             Snap.setSSLChainCert False
     Snap.serveSnaplet snapConfig (appInit xknEnv)
 
-runNode :: NodeConfig -> BitcoinP2P -> [FilePath] -> IO ()
-runNode nodeConf bitcoinP2PEnv certPaths = do
+runNode :: SecKey -> NodeConfig -> BitcoinP2P -> [FilePath] -> IO ()
+runNode allSecKey nodeConf bitcoinP2PEnv certPaths = do
     lg <-
         LG.new
             (LG.setOutput
                  (LG.Path $ T.unpack $ logFileName nodeConf)
                  (LG.setLogLevel (logLevel nodeConf) LG.defSettings))
-    runThreads nodeConf bitcoinP2PEnv lg certPaths
+    runThreads allSecKey nodeConf bitcoinP2PEnv lg certPaths
 
-initReseller :: IO ()
-initReseller = do
+initReseller :: B.ByteString -> IO ()
+initReseller password = do
     putStrLn $ "Starting Reseller"
     nodeCnf <- readConfig "node-config.yaml"
+    cipherD :: AES256 <- throwCryptoErrorIO $ cipherInit $ deriveKey password
+    let seed = ecbDecrypt cipherD (either (fail "decode failed") id $ B64.decode $ encryptedSeed nodeCnf)
     udc <- H.new
     let bitcoinP2PEnv = BitcoinP2P nodeCnf udc
     let certFP = tlsCertificatePath nodeCnf
@@ -144,7 +151,7 @@ initReseller = do
     unless (cfp && kfp && csfp) $ P.error "Error: missing TLS certificate or keyfile"
     defaultAdminUser
     -- launch node --
-    runNode nodeCnf bitcoinP2PEnv [certFP, keyFP, csrFP]
+    runNode (read $ DT.unpack $ DTE.decodeUtf8 seed) nodeCnf bitcoinP2PEnv [certFP, keyFP, csrFP]
 
 defaultAdminUser :: IO ()
 defaultAdminUser = do
@@ -169,19 +176,37 @@ defaultAdminUser = do
             putStrLn $ "  Password : " ++ (aurPassword $ fromJust usr)
             putStrLn $ "******************************************************************* "
 
-relaunch :: IO ()
-relaunch =
+relaunch :: B.ByteString -> IO ()
+relaunch password =
     forever $ do
         let pid = "/tmp/nexa.pid.1"
         running <- isRunning pid
         if running
             then threadDelay (30 * 1000000)
             else do
-                runDetached (Just pid) (ToFile "nexa.log") initReseller
+                runDetached (Just pid) (ToFile "nexa.log") (initReseller password)
                 threadDelay (5000000)
 
 main :: IO ()
 main = do
     let pid = "/tmp/nexa.pid.0"
-    initReseller
+    putStrLn "Enter the key: \n>"
+    password <- B.getLine
+    initReseller password
     --runDetached (Just pid) (ToFile "nexa.log") relaunch
+
+saltSize = 32
+
+paramN = 16 :: Word64
+
+paramR = 8
+
+paramP = 1
+
+paramKeyLen = 32
+
+--Scrypt KDF
+deriveKey :: B.ByteString -> B.ByteString
+deriveKey password = generate params password ("" :: B.ByteString)
+  where
+    params = Parameters {n = paramN, r = paramR, p = paramP, outputLength = paramKeyLen}

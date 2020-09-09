@@ -50,6 +50,7 @@ executable reseller
     , conduit
     , containers
     , cryptonite
+    , cryptocipher
     , data-default
     , errors
     , filepath

@@ -8,7 +8,7 @@ endPointHTTPSListenIP: 127.0.0.1
 
 endPointHTTPSListenPort: 9091
 
-allegoryVendorSecretKey: 1435cf8e437d789eac332c3c66b2a51876e58c21db4b4da15488c3decb1a8b57
+encryptedSeed: 7Bq7Ls8oz0seH7AzwrsuqiS1UEgBHG1GOG0yK6xUsjEiil9drMLdWOnwEf4lfus+4UED60wU5fha7QjemUhMYw==
 
 tlsCertificatePath : ./example.crt
 

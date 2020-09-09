@@ -6,6 +6,7 @@ packages:
 extra-deps:
 
     - ../xoken-core/core
+    - cryptocipher-0.6.2
     - serialise-0.2.0.0
     - cborg-0.2.0.0
     - timers-updatable-0.2.0.2
