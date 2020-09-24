@@ -26,13 +26,20 @@ import System.Logger
 type HashTable k v = H.BasicHashTable k v
 
 type HasResellerEnv env m
-     = (HasBitcoinP2P m, HasLogger m, HasAllegoryEnv m, MonadReader env m, MonadBaseControl IO m, MonadThrow m)
+     = ( HasBitcoinP2P m
+       , HasLogger m
+       , HasAllegoryEnv m
+       , HasNexaEnv m
+       , MonadReader env m
+       , MonadBaseControl IO m
+       , MonadThrow m)
 
 data ResellerEnv =
     ResellerEnv
         { loggerEnv :: !Logger
         , bitcoinP2PEnv :: !BitcoinP2P
         , allegoryEnv :: !AllegoryEnv
+        , nexaEnv :: NexaEnv
         }
 
 data BitcoinP2P =
@@ -46,6 +53,11 @@ data AllegoryEnv =
         { allegorySecretKey :: !SecKey
         }
 
+data NexaEnv =
+    NexaEnv
+        { nexaSessionKey :: String
+        }
+
 class HasBitcoinP2P m where
     getBitcoinP2P :: m (BitcoinP2P)
 
@@ -54,3 +66,6 @@ class HasLogger m where
 
 class HasAllegoryEnv m where
     getAllegory :: m (AllegoryEnv)
+
+class HasNexaEnv m where
+    getNexaEnv :: m (NexaEnv)

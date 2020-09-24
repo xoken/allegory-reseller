@@ -25,18 +25,23 @@ import System.Logger
 
 data NodeConfig =
     NodeConfig
-        { bitcoinNetwork :: Network
-        , logLevel :: Level
-        , logFileName :: T.Text
-        , endPointHTTPSListenIP :: String
-        , endPointHTTPSListenPort :: PortNumber
-        , encryptedSeed :: ByteString
-        , tlsCertificatePath :: FilePath
+        { bitcoinNetwork :: !Network
+        , logLevel :: !Level
+        , logFileName :: !T.Text
+        , endPointHTTPSListenIP :: !String
+        , endPointHTTPSListenPort :: !PortNumber
+        , encryptedSeed :: !ByteString
+        , tlsCertificatePath :: !FilePath
         , tlsKeyfilePath :: FilePath
-        , tlsCertificateStorePath :: FilePath
-        , defaultSathosi :: Int
-        , xokenListenIP :: String
-        , xokenListenPort :: PortNumber
+        , tlsCertificateStorePath :: !FilePath
+        , defaultSathosi :: !Int
+        , feeSatsCreate :: !Int
+        , feeSatsTransfer :: !Int
+        , nameUtxoSatoshis :: !Int
+        , xokenListenIP :: !String
+        , xokenListenPort :: !PortNumber
+        , nexaUsername :: !String
+        , nexaPassword :: !String
         }
     deriving (Show, Generic)
 
@@ -63,9 +68,8 @@ readConfig path = do
     case config of
         Left e -> print e *> throw e
         Right con -> return con
-
 -- | Decode string of human-readable hex characters.
-decodeHex :: Text -> Maybe ByteString
-decodeHex text =
-    let (x, b) = B16.decode (E.encodeUtf8 text)
-     in guard (b == BS.empty) >> return x
+--decodeHex :: Text -> Maybe ByteString
+--decodeHex text =
+--    let (x, b) = B16.decode (E.encodeUtf8 text)
+--     in guard (b == BS.empty) >> return x

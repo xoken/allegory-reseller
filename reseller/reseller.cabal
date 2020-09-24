@@ -36,6 +36,10 @@ executable reseller
                  Reseller.HTTP.Types
                  Reseller.Service.User
                  Reseller.Service.Xoken
+                 Nexa
+                 Nexa.Auth
+                 Nexa.Types
+                 Nexa.Constants
 
   ghc-options:  -fprof-auto -fprof-cafs -rtsopts -O2 -threaded -with-rtsopts=-N
   hs-source-dirs:
@@ -117,4 +121,7 @@ executable reseller
     , daemons
     , snap
     , lens
+    , connection
+    , http-client
+    , http-client-tls
   default-language: Haskell2010

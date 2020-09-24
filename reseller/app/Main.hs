@@ -82,6 +82,9 @@ import Data.Word
 import qualified LevelDB as DL
 import Network.Simple.TCP
 import Network.Socket
+import Network.Xoken.Util
+import Nexa
+import Nexa.Auth
 import NodeConfig
 import Options.Applicative
 import Paths_reseller as P
@@ -113,9 +116,22 @@ instance Exception ConfigException
 type HashTable k v = H.BasicHashTable k v
 
 runThreads :: SecKey -> NodeConfig -> BitcoinP2P -> LG.Logger -> [FilePath] -> IO ()
-runThreads allSecKey nodeConf bitcoinP2PEnv lg certPaths = do
+runThreads allSecKey nodeConf bitcoinP2PEnv lg certPaths
+    -- get Nexa session key
+ = do
+    sessionKey <-
+        (\k ->
+             case k of
+                 Left e -> P.error $ "Error: couldn't get Nexa session key: " <> (show e)
+                 Right k' -> return k') =<<
+        (getNexaSessionKey
+             (xokenListenIP nodeConf <> ":" <> (show $ xokenListenPort nodeConf))
+             (nexaUsername nodeConf)
+             (nexaPassword nodeConf))
+    putStrLn $ "got Nexa session key: " <> (show sessionKey)
     let allegoryEnv = AllegoryEnv allSecKey
-    let xknEnv = ResellerEnv lg bitcoinP2PEnv allegoryEnv
+    let nexaEnv = NexaEnv sessionKey
+    let xknEnv = ResellerEnv lg bitcoinP2PEnv allegoryEnv nexaEnv
     -- start HTTP endpoint
     let snapConfig =
             Snap.defaultConfig & Snap.setSSLBind (DTE.encodeUtf8 $ DT.pack $ endPointHTTPSListenIP nodeConf) &
@@ -137,21 +153,29 @@ runNode allSecKey nodeConf bitcoinP2PEnv certPaths = do
 initReseller :: B.ByteString -> IO ()
 initReseller password = do
     putStrLn $ "Starting Reseller"
-    nodeCnf <- readConfig "node-config.yaml"
+    !nodeCnf <- readConfig "node-config.yaml"
     cipherD :: AES256 <- throwCryptoErrorIO $ cipherInit $ deriveKey password
     let seed = ecbDecrypt cipherD (either (fail "decode failed") id $ B64.decode $ encryptedSeed nodeCnf)
+    putStrLn $ "decoded seed: " <> (show seed)
     udc <- H.new
     let bitcoinP2PEnv = BitcoinP2P nodeCnf udc
     let certFP = tlsCertificatePath nodeCnf
         keyFP = tlsKeyfilePath nodeCnf
         csrFP = tlsCertificateStorePath nodeCnf
+        host = xokenListenIP nodeCnf <> ":" <> (show $ xokenListenPort nodeCnf)
+        user = nexaUsername nodeCnf
+        pass = nexaPassword nodeCnf
     cfp <- doesFileExist certFP
     kfp <- doesFileExist keyFP
     csfp <- doesDirectoryExist csrFP
     unless (cfp && kfp && csfp) $ P.error "Error: missing TLS certificate or keyfile"
     defaultAdminUser
     -- launch node --
-    runNode (read $ DT.unpack $ DTE.decodeUtf8 seed) nodeCnf bitcoinP2PEnv [certFP, keyFP, csrFP]
+    -- runNode (read $ DT.unpack $ DTE.decodeUtf8 seed) nodeCnf bitcoinP2PEnv [certFP, keyFP, csrFP]
+    -- run with supplied secret key for now --
+    let sk = fromJust $ secKey $ fromJust $ decodeHex "e7b7a3b504f042d5aab1df601be48682b09a3499be782de1a2074282753084dc"
+    putStrLn $ "got sk: " <> (show sk)
+    runNode sk nodeCnf bitcoinP2PEnv [certFP, keyFP, csrFP]
 
 defaultAdminUser :: IO ()
 defaultAdminUser = do

@@ -33,6 +33,7 @@ import Data.Time.Clock
 import Data.Word
 import GHC.Generics
 import Network.HTTP.Req
+import Nexa.Types (OutPoint')
 import Prelude
 import Reseller.Env
 import Snap
@@ -47,6 +48,9 @@ instance HasBitcoinP2P (Handler App App) where
 
 instance HasAllegoryEnv (Handler App App) where
     getAllegory = allegoryEnv <$> gets _env
+
+instance HasNexaEnv (Handler App App) where
+    getNexaEnv = nexaEnv <$> gets _env
 
 instance HasLogger (Handler App App) where
     getLogger = loggerEnv <$> gets _env
@@ -78,6 +82,8 @@ instance FromJSON ReqParams where
     parseJSON (Object o) =
         (AuthenticateReq <$> o .: "username" <*> o .: "password" <*> o .:? "prettyPrint" .!= True) <|>
         (GeneralReq <$> o .: "sessionKey" <*> o .:? "prettyPrint" .!= True <*> o .:? "methodParams")
+
+instance ToJSON ReqParams
 
 data ReqParams'
     = AddUser
@@ -138,7 +144,6 @@ data ResponseBody
     deriving (Generic, Show, Eq, Serialise)
 
 instance ToJSON ResponseBody where
-    toJSON (AuthenticateResp a) = object ["auth" .= a]
     toJSON (RespAddUser usr) = object ["user" .= usr]
     toJSON (RespUser u) = object ["user" .= u]
     toJSON (RespPartiallySignedAllegoryTx ps) = object ["psaTx" .= (T.decodeUtf8 . B64.encode $ ps)]
@@ -171,11 +176,14 @@ instance FromJSON UpdateUserByUsername' where
 
 data AuthResp =
     AuthResp
-        { sessionKey :: Maybe String
-        , callsUsed :: Int
-        , callsRemaining :: Int
+        { authSessionKey :: Maybe String
+        , authCallsUsed :: Int
+        , authCallsRemaining :: Int
         }
-    deriving (Generic, Show, Eq, Serialise, ToJSON, FromJSON)
+    deriving (Generic, Show, Eq, Serialise)
+
+instance FromJSON AuthResp where
+    parseJSON (Object o) = (AuthResp <$> o .: "sessionKey" <*> o .: "callsUsed" <*> o .: "callsRemaining")
 
 data AddUserResp =
     AddUserResp
@@ -232,12 +240,5 @@ instance FromJSON User where
                            let (h:t) = x
                             in "u" <> (Char.toUpper h : t)
                  })
-
-data OutPoint' =
-    OutPoint'
-        { opTxHash :: String
-        , opIndex :: Int32
-        }
-    deriving (Show, Generic, Eq, Serialise, FromJSON, ToJSON)
 
 makeLenses ''App
