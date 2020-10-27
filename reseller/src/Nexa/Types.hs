@@ -53,19 +53,24 @@ data AuthenticateResponse' =
 
 instance FromJSON AuthenticateResponse'
 
-data NexaResponse
-    = GetProducerResponse
-          { name :: [Int]
-          , script :: String
-          , outpoint :: OutPoint'
-          }
-    | GetUtxosByAddressResponse
-          { nextCursor :: Maybe String
-          , utxos :: [AddressOutputs]
-          }
+data GetProducerResponse =
+    GetProducerResponse
+        { name :: [Int]
+        , script :: String
+        , outpoint :: OutPoint'
+        }
     deriving (Show, Ord, Eq, Read, Generic)
 
-instance FromJSON NexaResponse
+instance FromJSON GetProducerResponse
+
+data GetUtxosByAddressResponse
+    = GetUtxosByAddressResponse
+        { nextCursor :: Maybe String
+        , utxos :: [AddressOutputs]
+        }
+    deriving (Show, Ord, Eq, Read, Generic)
+
+instance FromJSON GetUtxosByAddressResponse
 
 data OutPoint' =
     OutPoint'

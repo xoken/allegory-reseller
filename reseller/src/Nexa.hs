@@ -13,13 +13,13 @@ import Nexa.Types
 getProducer :: (MonadUnliftIO m) => String -> SessionKey -> [Int] -> m ([Int], String, OutPoint')
 getProducer addr sk name = do
     response <- liftIO $ nexaReq GetProducer (encode $ GetProducerRequest name) addr (Just sk)
-    case decode (responseBody response) :: Maybe NexaResponse of
+    case decode (responseBody response) :: Maybe GetProducerResponse of
         Nothing -> throw ResponseParseException
         Just (GetProducerResponse name scr op) -> return (name, scr, op)
 
 getUtxoByAddress :: (MonadIO m) => String -> SessionKey -> String -> m AddressOutputs
 getUtxoByAddress nexaAddr sk addr = do
     response <- liftIO $ nexaGetReq GetUtxosByAddress addr 1 nexaAddr (Just sk)
-    case decode (responseBody response) :: Maybe NexaResponse of
+    case decode (responseBody response) :: Maybe GetUtxosByAddressResponse of
         Nothing -> throw ResponseParseException
         Just resp -> return $ head $ utxos resp
