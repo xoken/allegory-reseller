@@ -63,8 +63,8 @@ data GetProducerResponse =
 
 instance FromJSON GetProducerResponse
 
-data GetUtxosByAddressResponse
-    = GetUtxosByAddressResponse
+data GetUtxosByAddressResponse =
+    GetUtxosByAddressResponse
         { nextCursor :: Maybe String
         , utxos :: [AddressOutputs]
         }
@@ -115,7 +115,7 @@ data SpendInfo' =
     SpendInfo'
         { spendingOutputIndex :: Int32
         , outputAddress :: T.Text
-        , value :: Int64
+        , value' :: Int64
         }
     deriving (Show, Ord, Eq, Read, Generic)
 

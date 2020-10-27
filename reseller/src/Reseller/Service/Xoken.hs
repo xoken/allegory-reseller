@@ -53,11 +53,21 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     allSecKey <- allegorySecretKey <$> getAllegory
     nexaAddr <- (\nc -> return $ xokenListenIP nc <> ":" <> (show $ xokenListenPort nc)) $ (nodeConfig bp2pEnv)
     (producerRoot, scr, op) <- liftIO $ getProducer nexaAddr sessionKey nameArr
+    let net = bitcoinNetwork nodeCfg
+    let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ allSecKey
+    let prScript = addressToScriptBS prAddr
+    let addr' =
+            case addrToString net prAddr of
+                Nothing -> ""
+                Just t -> DT.unpack t
     (nameip, existed) <-
         if (producerRoot == init nameArr) || (producerRoot == nameArr)
             then return ((op, DT.pack scr), True)
             else do
-                gotProducer <- makeProducer (init nameArr) producerRoot op
+                fundingUtxos <-
+                    filter (\ao -> (value ao < 200000) && (value ao < 49999)) <$>
+                    (getUtxoByAddress nexaAddr sessionKey addr')
+                gotProducer <- makeProducer (init nameArr) fundingUtxos producerRoot op
                 return (gotProducer, False)
     --
     let paySats = defaultSathosi nodeCfg
@@ -180,11 +190,17 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
             liftIO $ print $ "error occured while signing tx: " <> show err
             return BC.empty
 
-makeProducer :: (MonadHttp m, HasResellerEnv env m, MonadIO m) => [Int] -> [Int] -> OutPoint' -> m (OutPoint', DT.Text)
-makeProducer name fromRoot rootOutpoint
+makeProducer ::
+       (MonadHttp m, HasResellerEnv env m, MonadIO m)
+    => [Int]
+    -> [AddressOutputs]
+    -> [Int]
+    -> OutPoint'
+    -> m (OutPoint', DT.Text)
+makeProducer name fundingUtxos fromRoot rootOutpoint
     | name == fromRoot = do return (rootOutpoint, "")
     | otherwise = do
-        nameInput <- makeProducer (init name) fromRoot rootOutpoint
+        nameInput <- makeProducer (init name) (tail fundingUtxos) fromRoot rootOutpoint
         lg <- getLogger
         bp2pEnv <- getBitcoinP2P
         nodeCfg <- nodeConfig <$> getBitcoinP2P
@@ -205,7 +221,7 @@ makeProducer name fromRoot rootOutpoint
                     (\(x, s) ->
                          TxIn (OutPoint (fromString $ opTxHash x) (fromIntegral $ opIndex x)) (fromJust $ decodeHex s) 0)
                     ([nameInput])
-        fundingUtxo <- getUtxoByAddress nexaAddr sessionKey addr'
+        let fundingUtxo = head fundingUtxos
         let (ins, fval) =
                 ( ins' ++
                   [ TxIn

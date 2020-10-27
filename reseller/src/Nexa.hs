@@ -17,9 +17,9 @@ getProducer addr sk name = do
         Nothing -> throw ResponseParseException
         Just (GetProducerResponse name scr op) -> return (name, scr, op)
 
-getUtxoByAddress :: (MonadIO m) => String -> SessionKey -> String -> m AddressOutputs
+getUtxoByAddress :: (MonadIO m) => String -> SessionKey -> String -> m [AddressOutputs]
 getUtxoByAddress nexaAddr sk addr = do
-    response <- liftIO $ nexaGetReq GetUtxosByAddress addr 1 nexaAddr (Just sk)
+    response <- liftIO $ nexaGetReq GetUtxosByAddress addr 400 nexaAddr (Just sk)
     case decode (responseBody response) :: Maybe GetUtxosByAddressResponse of
         Nothing -> throw ResponseParseException
-        Just resp -> return $ head $ utxos resp
+        Just resp -> return $ utxos resp

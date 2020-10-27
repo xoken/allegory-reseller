@@ -134,21 +134,22 @@ getPartiallySignedAllegoryTx _ = throwBadRequest
 -- Helper functions
 withAuth :: Handler App App () -> Handler App App ()
 withAuth onSuccess = do
-    rq <- getRequest
-    env <- gets _env
-    let mh = getHeader "Authorization" rq
-    let h = parseAuthorizationHeader mh
-    case h of
-        Just sk -> putRequest $ rqSetParam "sessionKey" [sk] rq
-        Nothing -> return ()
-    uok <- undefined -- liftIO $ testAuthHeader env h Nothing
-    modifyResponse (setContentType "application/json")
-    if uok
-        then onSuccess
-        else case h of
-                 Nothing -> throwChallenge
-                 Just _ -> throwDenied
+    onSuccess
 
+--    rq <- getRequest
+--    env <- gets _env
+--    let mh = getHeader "Authorization" rq
+--    let h = parseAuthorizationHeader mh
+--    case h of
+--        Just sk -> putRequest $ rqSetParam "sessionKey" [sk] rq
+--        Nothing -> return ()
+--    uok <- undefined -- liftIO $ testAuthHeader env h Nothing
+--    modifyResponse (setContentType "application/json")
+--    if uok
+--        then onSuccess
+--        else case h of
+--                 Nothing -> throwChallenge
+--                 Just _ -> throwDenied
 withAuthAs :: DT.Text -> Handler App App () -> Handler App App ()
 withAuthAs role onSuccess = do
     rq <- getRequest
