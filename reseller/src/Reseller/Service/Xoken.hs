@@ -35,6 +35,7 @@ import Prelude
 import Reseller.Common
 import Reseller.Env
 import Reseller.HTTP.Types
+import System.Logger as LG
 import Xoken
 
 xGetPartiallySignedAllegoryTx ::
@@ -50,52 +51,58 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     bp2pEnv <- getBitcoinP2P
     nodeCfg <- nodeConfig <$> getBitcoinP2P
     sessionKey <- nexaSessionKey <$> getNexaEnv
-    allSecKey <- allegorySecretKey <$> getAllegory
-    nexaAddr <- (\nc -> return $ xokenListenIP nc <> ":" <> (show $ xokenListenPort nc)) $ (nodeConfig bp2pEnv)
-    (producerRoot, scr, op) <- liftIO $ getProducer nexaAddr sessionKey nameArr
+    nameSecKey <- nameUtxoSecKey <$> getAllegory
+    fundSecKey <- fundUtxoSecKey <$> getAllegory
+    nexaAddr <- (\nc -> return $ nexaListenIP nc <> ":" <> (show $ nexaListenPort nc)) $ (nodeConfig bp2pEnv)
+    producer <- liftIO $ getProducer nexaAddr sessionKey nameArr isProducer
+    let producerRoot = forName producer
+    let rqMileage = (length nameArr) - (length producerRoot)
+    let scr = script producer
+    let op = outPoint producer
     let net = bitcoinNetwork nodeCfg
-    let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ allSecKey
-    let prScript = addressToScriptBS prAddr
-    let addr' =
-            case addrToString net prAddr of
+    let nameUtxoSats = nameUtxoSatoshis nodeCfg
+    let nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
+    let nameScript = addressToScriptBS nameAddr
+    let nameAddr' =
+            case addrToString net nameAddr of
                 Nothing -> ""
                 Just t -> DT.unpack t
-    (nameip, existed) <-
+    let fundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ fundSecKey
+    let fundScript = addressToScriptBS fundAddr
+    let fundAddr' =
+            case addrToString net fundAddr of
+                Nothing -> ""
+                Just t -> DT.unpack t
+    (nameRoot, remFundInput, existed) <-
         if (producerRoot == init nameArr) || (producerRoot == nameArr)
-            then return ((op, DT.pack scr), True)
+            then do
+                let rootNameInput =
+                        SigInput
+                            (addressToOutput nameAddr)
+                            (fromIntegral nameUtxoSats)
+                            (OutPoint (fromJust $ hexToTxHash $ DT.pack $ opTxHash op) (fromIntegral $ opIndex op))
+                            (setForkIdFlag sigHashAll)
+                            Nothing
+                return (rootNameInput, [], True)
             else do
-                fundingUtxos <-
-                    filter (\ao -> (value ao < 200000) && (value ao < 49999)) <$>
-                    (getUtxoByAddress nexaAddr sessionKey addr')
-                gotProducer <- makeProducer (init nameArr) fundingUtxos producerRoot op
-                return (gotProducer, False)
+                fundingUtxos <- getFundingUtxos nexaAddr sessionKey fundAddr' rqMileage Nothing
+                (nameRoot, remFundInput) <- makeProducer (init nameArr) fundingUtxos producerRoot op
+                return (nameRoot, remFundInput, False)
     --
-    let paySats = defaultSathosi nodeCfg
-    let anutxos = nameUtxoSatoshis nodeCfg
+    let paySats = defaultPriceSats nodeCfg
     let allegoryFeeSatsCreate = feeSatsCreate nodeCfg
     let allegoryFeeSatsTransfer = feeSatsTransfer nodeCfg
     let net = bitcoinNetwork nodeCfg
     let totalEffectiveInputSats = sum $ snd $ unzip $ payips
     let ins =
-            L.map
-                (\(x, s) ->
-                     TxIn (OutPoint (fromString $ opTxHash x) (fromIntegral $ opIndex x)) (fromJust $ decodeHex s) 0)
-                ([nameip] ++ ((\ip -> (fst ip, DT.pack "")) <$> payips))
-    sigInputs <-
-        mapM
-            (\(x, s) -> do
-                 case (decodeOutputBS ((fst . B16.decode) (E.encodeUtf8 s))) of
-                     Left e -> do
-                         throw KeyValueDBLookupException
-                     Right scr -> do
-                         return $
-                             SigInput
-                                 scr
-                                 (fromIntegral $ anutxos)
-                                 (OutPoint (fromString $ opTxHash x) (fromIntegral $ opIndex x))
-                                 (setForkIdFlag sigHashAll)
-                                 Nothing)
-            [nameip]
+            ((\si -> TxIn (sigInputOP si) (encodeOutputBS $ sigInputScript si) 0xFFFFFFFF) <$> (nameRoot : remFundInput)) ++
+            ((\(x, s) ->
+                  TxIn
+                      (OutPoint (fromString $ opTxHash x) (fromIntegral $ opIndex x))
+                      (fromJust $ decodeHex s)
+                      0xFFFFFFFF) <$>
+             ((\ip -> (fst ip, DT.pack "")) <$> payips))
+    let sigInputs = nameRoot : remFundInput
     let outs =
             if existed
                 then if isProducer
@@ -110,7 +117,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                                               Nothing
                                               [])
                              let opRetScript = frameOpReturn $ C.toStrict $ serialise al
-                             let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ allSecKey
+                             let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
                              let prScript = addressToScriptBS prAddr
                              let payScript = addressToScriptBS prAddr
                              let changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsCreate)
@@ -123,7 +130,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                                                        Nothing -> throw KeyValueDBLookupException
                                            let script = addressToScriptBS addr
                                            TxOut (fromIntegral $ snd x) script)
-                                      [(owner, (fromIntegral $ anutxos)), (change, changeSats)]) ++
+                                      [(owner, (fromIntegral $ nameUtxoSats)), (change, changeSats)]) ++
                                  [TxOut ((fromIntegral paySats) :: Word64) payScript]
                          else do
                              let al =
@@ -140,7 +147,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                                                     (Registration "addrCommit" "utxoCommit" "signature" 876543)
                                               ])
                              let opRetScript = frameOpReturn $ C.toStrict $ serialise al
-                             let payAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ allSecKey
+                             let payAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
                              let payScript = addressToScriptBS payAddr
                              let changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsTransfer)
                              [TxOut 0 opRetScript] ++
@@ -152,7 +159,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                                                        Nothing -> throw KeyValueDBLookupException
                                            let script = addressToScriptBS addr
                                            TxOut (fromIntegral $ snd x) script)
-                                      [(owner, (fromIntegral $ anutxos)), (change, changeSats)]) ++
+                                      [(owner, (fromIntegral $ nameUtxoSats)), (change, changeSats)]) ++
                                  [TxOut ((fromIntegral paySats) :: Word64) payScript]
                 else do
                     let al =
@@ -168,7 +175,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                                            (last nameArr)
                                      ])
                     let opRetScript = frameOpReturn $ C.toStrict $ serialise al
-                    let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ allSecKey
+                    let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
                     let prScript = addressToScriptBS prAddr
                     let payScript = addressToScriptBS prAddr
                     let changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsCreate)
@@ -181,10 +188,10 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                                               Nothing -> throw KeyValueDBLookupException
                                   let script = addressToScriptBS addr
                                   TxOut (fromIntegral $ snd x) script)
-                             [(owner, (fromIntegral $ anutxos)), (change, changeSats)]) ++
+                             [(owner, (fromIntegral $ nameUtxoSats)), (change, changeSats)]) ++
                         [TxOut ((fromIntegral paySats) :: Word64) payScript]
     let psatx = Tx 1 ins outs 0
-    case signTx net psatx sigInputs [allSecKey] of
+    case signTx net psatx sigInputs [nameSecKey, fundSecKey] of
         Right tx -> return $ BSL.toStrict $ A.encode tx
         Left err -> do
             liftIO $ print $ "error occured while signing tx: " <> show err
@@ -193,43 +200,45 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
 makeProducer ::
        (MonadHttp m, HasResellerEnv env m, MonadIO m)
     => [Int]
-    -> [AddressOutputs]
+    -> [SigInput]
     -> [Int]
     -> OutPoint'
-    -> m (OutPoint', DT.Text)
-makeProducer name fundingUtxos fromRoot rootOutpoint
-    | name == fromRoot = do return (rootOutpoint, "")
+    -> m (SigInput, [SigInput])
+makeProducer name gotFundInputs fromRoot rootOutpoint
+    | name == fromRoot = do
+        nodeCfg <- nodeConfig <$> getBitcoinP2P
+        nameSecKey <- nameUtxoSecKey <$> getAllegory
+        let nameUtxoSats = nameUtxoSatoshis nodeCfg
+            nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
+            nameScript = addressToScriptBS nameAddr
+            nextNameInput =
+                SigInput
+                    (addressToOutput nameAddr)
+                    (fromIntegral nameUtxoSats)
+                    (OutPoint
+                         (fromJust $ hexToTxHash $ DT.pack $ opTxHash rootOutpoint)
+                         (fromIntegral $ opIndex rootOutpoint))
+                    (setForkIdFlag sigHashAll)
+                    Nothing
+        return (nextNameInput, gotFundInputs)
     | otherwise = do
-        nameInput <- makeProducer (init name) (tail fundingUtxos) fromRoot rootOutpoint
+        (nameInput, fundInput) <- makeProducer (init name) gotFundInputs fromRoot rootOutpoint
         lg <- getLogger
         bp2pEnv <- getBitcoinP2P
         nodeCfg <- nodeConfig <$> getBitcoinP2P
         sessionKey <- nexaSessionKey <$> getNexaEnv
-        allSecKey <- allegorySecretKey <$> getAllegory
-        let anutxos = nameUtxoSatoshis nodeCfg
+        nameSecKey <- nameUtxoSecKey <$> getAllegory
+        fundSecKey <- fundUtxoSecKey <$> getAllegory
         let net = bitcoinNetwork nodeCfg
-        let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ allSecKey
-        let prScript = addressToScriptBS prAddr
-        let addr' =
-                case addrToString net prAddr of
-                    Nothing -> ""
-                    Just t -> DT.unpack t
-        nexaAddr <- (\nc -> return $ xokenListenIP nc <> ":" <> (show $ xokenListenPort nc)) $ (nodeConfig bp2pEnv)
-        -- TODO: make and commit interim transaction
-        let ins' =
-                L.map
-                    (\(x, s) ->
-                         TxIn (OutPoint (fromString $ opTxHash x) (fromIntegral $ opIndex x)) (fromJust $ decodeHex s) 0)
-                    ([nameInput])
-        let fundingUtxo = head fundingUtxos
-        let (ins, fval) =
-                ( ins' ++
-                  [ TxIn
-                        (OutPoint (fromString $ AO.outputTxHash fundingUtxo) (fromIntegral $ AO.outputIndex fundingUtxo))
-                        prScript
-                        0xFFFFFFFF
-                  ]
-                , AO.value fundingUtxo)
+            nameUtxoSats = nameUtxoSatoshis nodeCfg
+            nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
+            nameScript = addressToScriptBS nameAddr
+            fundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ fundSecKey
+            fundScript = addressToScriptBS fundAddr
+            remFunding = (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 fundInput) - 2500
+        let ins =
+                ((\si -> TxIn (sigInputOP si) nameScript 0xFFFFFFFF) $ nameInput) :
+                ((\si -> TxIn (sigInputOP si) fundScript 0xFFFFFFFF) <$> fundInput)
         let al =
                 Allegory
                     1
@@ -244,40 +253,46 @@ makeProducer name fundingUtxos fromRoot rootOutpoint
                          , (OwnerExtension (OwnerOutput (Index 3) (Just $ Endpoint "XokenP2P" "someuri_3")) (last name))
                          ])
         let opRetScript = frameOpReturn $ C.toStrict $ serialise al
-        let outs = [TxOut 0 opRetScript] ++ L.map (\_ -> TxOut (fromIntegral anutxos) prScript) [1, 2, 3]
-        let sigInputs =
-                [ SigInput
-                      (addressToOutput prAddr)
-                      (fromIntegral anutxos)
-                      (prevOutput $ head ins)
-                      (setForkIdFlag sigHashAll)
-                      Nothing
-                , SigInput
-                      (addressToOutput prAddr)
-                      (fromIntegral fval)
-                      (prevOutput $ ins !! 1)
-                      (setForkIdFlag sigHashAll)
-                      Nothing
-                ]
+        let outs =
+                [TxOut 0 opRetScript] ++
+                L.map (\_ -> TxOut (fromIntegral nameUtxoSats) nameScript) [1, 2, 3] ++ [TxOut 2500 fundScript]
+        let sigInputs = nameInput : fundInput
         let psaTx = Tx 1 ins outs 0
-        case signTx net psaTx sigInputs [allSecKey, allSecKey] of
+        case signTx net psaTx sigInputs $ [nameSecKey] ++ (take (length fundInput) $ repeat fundSecKey) of
             Right tx -> do
+                let nextFundInputs =
+                        case remFunding of
+                            0 -> []
+                            r' ->
+                                [ SigInput
+                                      (addressToOutput fundAddr)
+                                      (fromIntegral r')
+                                      (OutPoint (txHash tx) (fromIntegral 4))
+                                      (setForkIdFlag sigHashAll)
+                                      Nothing
+                                ]
+                    nextNameInput =
+                        SigInput
+                            (addressToOutput nameAddr)
+                            (fromIntegral nameUtxoSats)
+                            (OutPoint (txHash tx) (fromIntegral 2))
+                            (setForkIdFlag sigHashAll)
+                            Nothing
                 xRelayTx (nodeCfg) (Data.Serialize.encode tx)
-                return (txHash tx, prScript)
-            Left err -> do
-                liftIO $ putStrLn $ "error occured while signing transaction: " <> show err
+                return (nextNameInput, nextFundInputs)
+            Left e -> do
+                err lg $ LG.msg $ "Error: Failed to sign interim producer transaction: " <> (show e)
                 throw KeyValueDBLookupException
-        return nameInput
 
 xRelayTx :: (MonadHttp m, MonadIO m, MonadBaseControl IO m) => NodeConfig -> BC.ByteString -> m (Bool)
 xRelayTx nodeCnf rawTx = do
     resp <-
         req
             POST
-            (https (DT.pack $ xokenListenIP nodeCnf))
+            (https (DT.pack $ nexaListenIP nodeCnf))
             (ReqBodyJson (RelayTx rawTx))
             bsResponse
-            (port $ fromEnum $ xokenListenPort nodeCnf)
+            (port $ fromEnum $ nexaListenPort nodeCnf)
     case eitherDecodeStrict $ responseBody resp of
         Right (RespRelayTx b) -> undefined
         Left err -> undefined

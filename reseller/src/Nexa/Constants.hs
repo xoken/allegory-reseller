@@ -12,8 +12,9 @@ type SessionKey = String
 
 data NexaEndpoint
     = Auth
-    | GetProducer
+    | NameOutpoint
     | GetUtxosByAddress
+    | RelayTxn
     deriving (Show, Eq, Read)
 
 noCertValidationManager :: IO Manager
@@ -24,13 +25,25 @@ nexaPostEndpoint addr ep =
     "https://" <> addr <> "/v1/" <>
     case ep of
         Auth -> "auth"
-        GetProducer -> "producer"
+        NameOutpoint -> "name-outpoint"
+        RelayTxn -> "relay"
 
 nexaGetEndpoint :: String -> NexaEndpoint -> String -> Int -> String
 nexaGetEndpoint addr ep qstr pgSize =
     "https://" <> addr <> "/v1/" <>
     case ep of
         GetUtxosByAddress -> "address/" <> qstr <> "/utxos/?pagesize=" <> (show pgSize)
+
+utxosByAddressRequest :: String -> String -> Int -> Maybe String -> String
+utxosByAddressRequest nexaEndpoint address pageSize cursor =
+    let ep = "https://" <> nexaEndpoint <> "/v1/"
+        rq = "address/" <> address <> "/utxos/"
+        pg = "?pagesize=" <> (show pageSize)
+        cu =
+            case cursor of
+                Nothing -> ""
+                Just c' -> "&cursor=" <> c'
+     in ep <> rq <> pg <> cu
 
 nexaReq :: NexaEndpoint -> L.ByteString -> String -> Maybe SessionKey -> IO (Response L.ByteString)
 nexaReq ep body addr sk = do
@@ -50,10 +63,10 @@ nexaReq ep body addr sk = do
                 }
     httpLbs req man
 
-nexaGetReq :: NexaEndpoint -> String -> Int -> String -> Maybe SessionKey -> IO (Response L.ByteString)
-nexaGetReq ep qstr pgSize addr sk = do
+nexaGetReq :: String -> Maybe SessionKey -> IO (Response L.ByteString)
+nexaGetReq req sk = do
     man <- noCertValidationManager
-    init <- parseRequest $ nexaGetEndpoint addr ep qstr pgSize
+    init <- parseRequest $ req
     let req =
             init
                 { method = "GET"

@@ -21,6 +21,7 @@ import Data.Yaml
 import GHC.Generics
 import Network.Socket
 import Network.Xoken.Constants
+import Network.Xoken.Util
 import System.Logger
 
 data NodeConfig =
@@ -30,23 +31,24 @@ data NodeConfig =
         , logFileName :: !T.Text
         , endPointHTTPSListenIP :: !String
         , endPointHTTPSListenPort :: !PortNumber
-        , encryptedSeed :: !ByteString
         , tlsCertificatePath :: !FilePath
         , tlsKeyfilePath :: FilePath
         , tlsCertificateStorePath :: !FilePath
-        , defaultSathosi :: !Int
+        , defaultPriceSats :: !Int
+        , nameUtxoSecretKey :: !SecKey
+        , fundUtxoSecretKey :: !SecKey
         , feeSatsCreate :: !Int
         , feeSatsTransfer :: !Int
         , nameUtxoSatoshis :: !Int
-        , xokenListenIP :: !String
-        , xokenListenPort :: !PortNumber
+        , nexaListenIP :: !String
+        , nexaListenPort :: !PortNumber
         , nexaUsername :: !String
         , nexaPassword :: !String
         }
     deriving (Show, Generic)
 
 instance FromJSON ByteString where
-    parseJSON = withText "ByteString" $ \t -> pure (E.encodeUtf8 t)
+    parseJSON = withText "ByteString" $ \t -> pure $ fromJust (decodeHex t)
 
 instance FromJSON PortNumber where
     parseJSON v = fromInteger <$> parseJSON v
@@ -66,10 +68,7 @@ readConfig :: FilePath -> IO NodeConfig
 readConfig path = do
     config <- decodeFileEither path :: IO (Either ParseException NodeConfig)
     case config of
-        Left e -> print e *> throw e
+        Left e -> do
+            Prelude.putStrLn $ "failed to read config"
+            print e *> throw e
         Right con -> return con
--- | Decode string of human-readable hex characters.
---decodeHex :: Text -> Maybe ByteString
---decodeHex text =
---    let (x, b) = B16.decode (E.encodeUtf8 text)
---     in guard (b == BS.empty) >> return x

@@ -24,8 +24,9 @@ data NexaRequest
           { username :: String
           , password :: String
           }
-    | GetProducerRequest
+    | NameOutpointRequest
           { name :: [Int]
+          , isProducer :: Bool
           }
     | GetUTXOsByAddressRequest
           { address :: String
@@ -53,15 +54,16 @@ data AuthenticateResponse' =
 
 instance FromJSON AuthenticateResponse'
 
-data GetProducerResponse =
-    GetProducerResponse
-        { name :: [Int]
+data NameOutpointResponse =
+    NameOutpointResponse
+        { forName :: [Int]
         , script :: String
-        , outpoint :: OutPoint'
+        , outPoint :: OutPoint'
+        , isProducer :: Bool
         }
     deriving (Show, Ord, Eq, Read, Generic)
 
-instance FromJSON GetProducerResponse
+instance FromJSON NameOutpointResponse
 
 data GetUtxosByAddressResponse =
     GetUtxosByAddressResponse

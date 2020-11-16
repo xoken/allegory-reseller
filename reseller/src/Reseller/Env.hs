@@ -50,7 +50,8 @@ data BitcoinP2P =
 
 data AllegoryEnv =
     AllegoryEnv
-        { allegorySecretKey :: !SecKey
+        { nameUtxoSecKey :: !SecKey
+        , fundUtxoSecKey :: !SecKey
         }
 
 data NexaEnv =
