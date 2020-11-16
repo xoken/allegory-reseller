@@ -14,7 +14,7 @@ data NexaEndpoint
     = Auth
     | NameOutpoint
     | GetUtxosByAddress
-    | RelayTxn
+    | RelayTransaction
     deriving (Show, Eq, Read)
 
 noCertValidationManager :: IO Manager
@@ -26,7 +26,7 @@ nexaPostEndpoint addr ep =
     case ep of
         Auth -> "auth"
         NameOutpoint -> "name-outpoint"
-        RelayTxn -> "relay"
+        RelayTransaction -> "relay"
 
 nexaGetEndpoint :: String -> NexaEndpoint -> String -> Int -> String
 nexaGetEndpoint addr ep qstr pgSize =

@@ -28,12 +28,12 @@ getProducer addr sk name isProducer = do
         Nothing -> throw ResponseParseException
         Just nameOutpointResponse -> return nameOutpointResponse
 
-getUtxoByAddress :: (MonadIO m) => String -> SessionKey -> String -> m [AddressOutputs]
-getUtxoByAddress nexaAddr sk addr = do
-    response <- liftIO $ nexaGetReq (utxosByAddressRequest nexaAddr addr 10 Nothing) (Just sk)
-    case decode (responseBody response) :: Maybe GetUtxosByAddressResponse of
+relayTx :: (MonadUnliftIO m) => String -> SessionKey -> String -> m RelayTxResponse
+relayTx nexaAddr sk tx = do
+    response <- liftIO $ nexaReq RelayTransaction (encode $ RelayTxRequest tx) nexaAddr (Just sk)
+    case decode (responseBody response) :: Maybe RelayTxResponse of
         Nothing -> throw ResponseParseException
-        Just resp -> return $ utxos resp
+        Just relayTxResponse -> return relayTxResponse
 
 showSI :: SigInput -> String
 showSI (SigInput _ v (OutPoint h i) _ _) = show $ ((h, i), v)

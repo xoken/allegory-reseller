@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -7,6 +8,9 @@ module Nexa.Types where
 import Codec.Serialise
 import Control.Exception
 import Data.Aeson
+import Data.ByteString as BS
+import Data.ByteString.Base64 as B64
+import Data.ByteString.Char8 as B8 (pack)
 import Data.Int
 import qualified Data.Text as T
 import GHC.Generics
@@ -32,9 +36,16 @@ data NexaRequest
           { address :: String
           , pageSize :: Int
           }
+    | RelayTxRequest
+          { rawTx :: String
+          }
     deriving (Show, Ord, Eq, Read, Generic)
 
-instance ToJSON NexaRequest
+instance ToJSON NexaRequest where
+    toJSON (AuthenticateRequest u p) = object ["username" .= u, "password" .= p]
+    toJSON (NameOutpointRequest n i) = object ["name" .= n, "isProducer" .= i]
+    toJSON (GetUTXOsByAddressRequest a p) = object ["address" .= a, "pageSize" .= p]
+    toJSON (RelayTxRequest r) = object ["rawTx" .= (BS.unpack $ B64.encode $ B8.pack r)]
 
 data AuthenticateResponse =
     AuthenticateResponse
@@ -73,6 +84,14 @@ data GetUtxosByAddressResponse =
     deriving (Show, Ord, Eq, Read, Generic)
 
 instance FromJSON GetUtxosByAddressResponse
+
+data RelayTxResponse =
+    RelayTxResponse
+        { txBroadcase :: Bool
+        }
+    deriving (Show, Ord, Eq, Read, Generic)
+
+instance FromJSON RelayTxResponse
 
 data OutPoint' =
     OutPoint'

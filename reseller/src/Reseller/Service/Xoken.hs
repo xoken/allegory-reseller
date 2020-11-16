@@ -13,6 +13,7 @@ import Control.Monad.IO.Class
 import Control.Monad.IO.Unlift
 import Control.Monad.Trans.Control
 import Data.Aeson as A
+import qualified Data.ByteString as BS (unpack)
 import qualified Data.ByteString.Base16 as B16 (decode, encode)
 import Data.ByteString.Base64 as B64
 import qualified Data.ByteString.Char8 as BC
@@ -229,6 +230,7 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
         sessionKey <- nexaSessionKey <$> getNexaEnv
         nameSecKey <- nameUtxoSecKey <$> getAllegory
         fundSecKey <- fundUtxoSecKey <$> getAllegory
+        nexaAddr <- (\nc -> return $ nexaListenIP nc <> ":" <> (show $ nexaListenPort nc)) $ (nodeConfig bp2pEnv)
         let net = bitcoinNetwork nodeCfg
             nameUtxoSats = nameUtxoSatoshis nodeCfg
             nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
@@ -278,21 +280,8 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
                             (OutPoint (txHash tx) (fromIntegral 2))
                             (setForkIdFlag sigHashAll)
                             Nothing
-                xRelayTx (nodeCfg) (Data.Serialize.encode tx)
+                liftIO $ relayTx nexaAddr sessionKey (BC.unpack $ Data.Serialize.encode tx)
                 return (nextNameInput, nextFundInputs)
             Left e -> do
                 err lg $ LG.msg $ "Error: Failed to sign interim producer transaction: " <> (show e)
                 throw KeyValueDBLookupException
-
-xRelayTx :: (MonadHttp m, MonadIO m, MonadBaseControl IO m) => NodeConfig -> BC.ByteString -> m (Bool)
-xRelayTx nodeCnf rawTx = do
-    resp <-
-        req
-            POST
-            (https (DT.pack $ nexaListenIP nodeCnf))
-            (ReqBodyJson (RelayTx rawTx))
-            bsResponse
-            (port $ fromEnum $ nexaListenPort nodeCnf)
-    case eitherDecodeStrict $ responseBody resp of
-        Right (RespRelayTx b) -> undefined
-        Left err -> undefined
