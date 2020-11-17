@@ -59,7 +59,7 @@ getFundingUtxos nexaAddr sk addr rqMileage cursor = do
                             LG.msg $ show "Error: Failed to decode '" <> addr <> "' as a " <> (show net) <> " address"
                         throw ResponseParseException
                     Just a' -> return $ addressToOutput a'
-            let requiredSats = rqMileage * 2500
+            let requiredSats = rqMileage * 20000
             debug lg $ LG.msg $ "<getFundingUtxos> address = " <> addr <> ": required sats: " <> (show requiredSats)
             let fundingUtxos =
                     sortOn sigInputValue $

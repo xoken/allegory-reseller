@@ -242,7 +242,7 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
             nameScript = addressToScriptBS nameAddr
             fundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ fundSecKey
             fundScript = addressToScriptBS fundAddr
-            remFunding = (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 fundInput) - 2500
+            remFunding = (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 fundInput) - 20000
         let ins =
                 ((\si -> TxIn (sigInputOP si) nameScript 0xFFFFFFFF) $ nameInput) :
                 ((\si -> TxIn (sigInputOP si) fundScript 0xFFFFFFFF) <$> fundInput)
@@ -262,7 +262,7 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
         let opRetScript = frameOpReturn $ C.toStrict $ serialise al
         let outs =
                 [TxOut 0 opRetScript] ++
-                L.map (\_ -> TxOut (fromIntegral nameUtxoSats) nameScript) [1, 2, 3] ++ [TxOut 2500 fundScript]
+                L.map (\_ -> TxOut (fromIntegral nameUtxoSats) nameScript) [1, 2, 3] ++ [TxOut remFunding fundScript]
         let sigInputs = nameInput : fundInput
         let psaTx = Tx 1 ins outs 0
         case signTx net psaTx sigInputs $ [nameSecKey] ++ (take (length fundInput) $ repeat fundSecKey) of
