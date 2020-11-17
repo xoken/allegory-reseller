@@ -49,6 +49,7 @@ xGetPartiallySignedAllegoryTx ::
     -> m (BC.ByteString)
 xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change = do
     lg <- getLogger
+    debug lg $ LG.msg $ "xGetPartiallySignedAllegoryTx called: nameArr: " <> (show nameArr)
     bp2pEnv <- getBitcoinP2P
     nodeCfg <- nodeConfig <$> getBitcoinP2P
     sessionKey <- nexaSessionKey <$> getNexaEnv
@@ -74,6 +75,8 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
             case addrToString net fundAddr of
                 Nothing -> ""
                 Just t -> DT.unpack t
+    debug lg $ LG.msg $ "xGetPartiallySignedAllegoryTx got producer root: " <> (show producer)
+    debug lg $ LG.msg $ "xGetPartiallySignedAllegoryTx need to make " <> (show rqMileage) <> " interim txns"
     (nameRoot, remFundInput, existed) <-
         if (producerRoot == init nameArr) || (producerRoot == nameArr)
             then do
@@ -89,6 +92,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                 fundingUtxos <- getFundingUtxos nexaAddr sessionKey fundAddr' rqMileage Nothing
                 (nameRoot, remFundInput) <- makeProducer (init nameArr) fundingUtxos producerRoot op
                 return (nameRoot, remFundInput, False)
+    debug lg $ LG.msg $ "xGetPartiallySignedAllegoryTx got nameRoot: " <> (show nameRoot) <> ", remFundInput: " <> (show remFundInput)
     --
     let paySats = defaultPriceSats nodeCfg
     let allegoryFeeSatsCreate = feeSatsCreate nodeCfg
@@ -223,8 +227,9 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
                     Nothing
         return (nextNameInput, gotFundInputs)
     | otherwise = do
-        (nameInput, fundInput) <- makeProducer (init name) gotFundInputs fromRoot rootOutpoint
         lg <- getLogger
+        debug lg $ LG.msg $ show "makeProducer: called for name: " <> (show name)
+        (nameInput, fundInput) <- makeProducer (init name) gotFundInputs fromRoot rootOutpoint
         bp2pEnv <- getBitcoinP2P
         nodeCfg <- nodeConfig <$> getBitcoinP2P
         sessionKey <- nexaSessionKey <$> getNexaEnv
