@@ -25,7 +25,7 @@ nexaPostEndpoint addr ep =
     "https://" <> addr <> "/v1/" <>
     case ep of
         Auth -> "auth"
-        NameOutpoint -> "name-outpoint"
+        NameOutpoint -> "allegory/name-outpoint"
         RelayTransaction -> "relay"
 
 nexaGetEndpoint :: String -> NexaEndpoint -> String -> Int -> String
