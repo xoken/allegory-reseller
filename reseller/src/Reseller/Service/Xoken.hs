@@ -78,7 +78,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     debug lg $ LG.msg $ "xGetPartiallySignedAllegoryTx got producer root: " <> (show producer)
     debug lg $ LG.msg $ "xGetPartiallySignedAllegoryTx need to make " <> (show rqMileage) <> " interim txns"
     (nameRoot, remFundInput, existed) <-
-        if (producerRoot == init nameArr) || (producerRoot == nameArr)
+        if producerRoot == nameArr
             then do
                 let rootNameInput =
                         SigInput
@@ -87,6 +87,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                             (OutPoint (fromJust $ hexToTxHash $ DT.pack $ opTxHash op) (fromIntegral $ opIndex op))
                             (setForkIdFlag sigHashAll)
                             Nothing
+                fundingUtxos <- getFundingUtxos nexaAddr sessionKey fundAddr' rqMileage Nothing
                 return (rootNameInput, [], True)
             else do
                 fundingUtxos <- getFundingUtxos nexaAddr sessionKey fundAddr' rqMileage Nothing
