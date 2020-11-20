@@ -6,6 +6,7 @@ module Nexa where
 import Control.Exception
 import Control.Monad.IO.Unlift
 import Data.Aeson
+import qualified Data.ByteString.Char8 as BC
 import Data.Int
 import Data.List
 import Data.Maybe
@@ -28,7 +29,7 @@ getProducer addr sk name isProducer = do
         Nothing -> throw ResponseParseException
         Just nameOutpointResponse -> return nameOutpointResponse
 
-relayTx :: (MonadUnliftIO m) => String -> SessionKey -> String -> m RelayTxResponse
+relayTx :: (MonadUnliftIO m) => String -> SessionKey -> BC.ByteString -> m RelayTxResponse
 relayTx nexaAddr sk tx = do
     response <- liftIO $ nexaReq RelayTransaction (encode $ RelayTxRequest tx) nexaAddr (Just sk)
     case decode (responseBody response) :: Maybe RelayTxResponse of

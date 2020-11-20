@@ -13,6 +13,7 @@ import Data.ByteString.Base64 as B64
 import Data.ByteString.Char8 as B8 (pack)
 import Data.Int
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import GHC.Generics
 
 data NexaException
@@ -37,7 +38,7 @@ data NexaRequest
           , pageSize :: Int
           }
     | RelayTxRequest
-          { rawTx :: String
+          { rawTx :: ByteString
           }
     deriving (Show, Ord, Eq, Read, Generic)
 
@@ -45,7 +46,7 @@ instance ToJSON NexaRequest where
     toJSON (AuthenticateRequest u p) = object ["username" .= u, "password" .= p]
     toJSON (NameOutpointRequest n i) = object ["name" .= n, "isProducer" .= i]
     toJSON (GetUTXOsByAddressRequest a p) = object ["address" .= a, "pageSize" .= p]
-    toJSON (RelayTxRequest r) = object ["rawTx" .= (BS.unpack $ B64.encode $ B8.pack r)]
+    toJSON (RelayTxRequest r) = object ["rawTx" .= (T.decodeUtf8 $ B64.encode r)]
 
 data AuthenticateResponse =
     AuthenticateResponse
@@ -87,7 +88,7 @@ instance FromJSON GetUtxosByAddressResponse
 
 data RelayTxResponse =
     RelayTxResponse
-        { txBroadcase :: Bool
+        { txBroadcast :: Bool
         }
     deriving (Show, Ord, Eq, Read, Generic)
 

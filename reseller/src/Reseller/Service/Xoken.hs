@@ -56,7 +56,13 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     nameSecKey <- nameUtxoSecKey <$> getAllegory
     fundSecKey <- fundUtxoSecKey <$> getAllegory
     nexaAddr <- (\nc -> return $ nexaListenIP nc <> ":" <> (show $ nexaListenPort nc)) $ (nodeConfig bp2pEnv)
-    producer <- liftIO $ getProducer nexaAddr sessionKey nameArr isProducer
+    res <- LE.try $ liftIO $ getProducer nexaAddr sessionKey nameArr isProducer
+    producer <-
+        case res of
+            Left (e :: SomeException) -> do
+                err lg $ LG.msg $ "Error: Failed to get producer: " <> (show e)
+                throw e
+            Right p' -> return p'
     let producerRoot = forName producer
     let rqMileage = (length nameArr) - (length producerRoot)
     let scr = script producer
@@ -218,6 +224,7 @@ makeProducer ::
     -> m (SigInput, [SigInput])
 makeProducer name gotFundInputs fromRoot rootOutpoint
     | name == fromRoot = do
+        lg <- getLogger
         nodeCfg <- nodeConfig <$> getBitcoinP2P
         nameSecKey <- nameUtxoSecKey <$> getAllegory
         let nameUtxoSats = nameUtxoSatoshis nodeCfg
@@ -232,10 +239,11 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
                          (fromIntegral $ opIndex rootOutpoint))
                     (setForkIdFlag sigHashAll)
                     Nothing
+        debug lg $ LG.msg $ "makeProducer: returned root node as producer: " <> (show nextNameInput)
         return (nextNameInput, gotFundInputs)
     | otherwise = do
         lg <- getLogger
-        debug lg $ LG.msg $ show "makeProducer: called for name: " <> (show name)
+        debug lg $ LG.msg $ "makeProducer: called for name: " <> (show name)
         (nameInput, fundInput) <- makeProducer (init name) gotFundInputs fromRoot rootOutpoint
         bp2pEnv <- getBitcoinP2P
         nodeCfg <- nodeConfig <$> getBitcoinP2P
@@ -243,6 +251,7 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
         nameSecKey <- nameUtxoSecKey <$> getAllegory
         fundSecKey <- fundUtxoSecKey <$> getAllegory
         nexaAddr <- (\nc -> return $ nexaListenIP nc <> ":" <> (show $ nexaListenPort nc)) $ (nodeConfig bp2pEnv)
+        debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": got keys & nexa endpoint " <> (show nexaAddr)
         let net = bitcoinNetwork nodeCfg
             nameUtxoSats = nameUtxoSatoshis nodeCfg
             nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
@@ -250,9 +259,13 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
             fundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ fundSecKey
             fundScript = addressToScriptBS fundAddr
             remFunding = (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 fundInput) - 20000
+        debug lg $
+            LG.msg $
+            "makeProducer: " <> (show name) <> ": got addresses, scripts, remaining funding: " <> (show remFunding)
         let ins =
                 ((\si -> TxIn (sigInputOP si) nameScript 0xFFFFFFFF) $ nameInput) :
                 ((\si -> TxIn (sigInputOP si) fundScript 0xFFFFFFFF) <$> fundInput)
+        debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": got inputs: " <> (show ins)
         let al =
                 Allegory
                     1
@@ -270,10 +283,12 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
         let outs =
                 [TxOut 0 opRetScript] ++
                 L.map (\_ -> TxOut (fromIntegral nameUtxoSats) nameScript) [1, 2, 3] ++ [TxOut remFunding fundScript]
+        debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": got outputs: " <> (show outs)
         let sigInputs = nameInput : fundInput
         let psaTx = Tx 1 ins outs 0
         case signTx net psaTx sigInputs $ [nameSecKey] ++ (take (length fundInput) $ repeat fundSecKey) of
             Right tx -> do
+                debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": signed txn: " <> (show tx)
                 let nextFundInputs =
                         case remFunding of
                             0 -> []
@@ -292,7 +307,12 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
                             (OutPoint (txHash tx) (fromIntegral 2))
                             (setForkIdFlag sigHashAll)
                             Nothing
-                liftIO $ relayTx nexaAddr sessionKey (BC.unpack $ Data.Serialize.encode tx)
+                res <- LE.try $ liftIO $ relayTx nexaAddr sessionKey (Data.Serialize.encode tx)
+                case res of
+                    Left (e :: SomeException) -> do
+                        debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": failed to relay txn: " <> (show e)
+                        throw e
+                    _ -> debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": relayed txn"
                 return (nextNameInput, nextFundInputs)
             Left e -> do
                 err lg $ LG.msg $ "Error: Failed to sign interim producer transaction: " <> (show e)

@@ -26,7 +26,7 @@ nexaPostEndpoint addr ep =
     case ep of
         Auth -> "auth"
         NameOutpoint -> "allegory/name-outpoint"
-        RelayTransaction -> "relay"
+        RelayTransaction -> "relaytx"
 
 nexaGetEndpoint :: String -> NexaEndpoint -> String -> Int -> String
 nexaGetEndpoint addr ep qstr pgSize =
