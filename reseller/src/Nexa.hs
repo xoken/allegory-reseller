@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 module Nexa where
 
@@ -10,6 +11,7 @@ import qualified Data.ByteString.Char8 as BC
 import Data.Int
 import Data.List
 import Data.Maybe
+import Data.Word
 import qualified Data.Text as DT
 import Network.HTTP.Client
 import Network.Xoken.Address
@@ -60,14 +62,16 @@ getFundingUtxos nexaAddr sk addr rqMileage cursor = do
                             LG.msg $ show "Error: Failed to decode '" <> addr <> "' as a " <> (show net) <> " address"
                         throw ResponseParseException
                     Just a' -> return $ addressToOutput a'
-            let requiredSats = rqMileage * 20000
+            nodeCfg <- nodeConfig <$> getBitcoinP2P
+            let nameUtxoSats = nameUtxoSatoshis nodeCfg
+            let requiredSats = rqMileage * (getFundingUtxoValue (fromIntegral nameUtxoSats))
             debug lg $ LG.msg $ "<getFundingUtxos> address = " <> addr <> ": required sats: " <> (show requiredSats)
             let fundingUtxos =
                     sortOn sigInputValue $
                     (\ao ->
                          SigInput
                              scriptPubKey
-                             (fromIntegral $ value ao)
+                             (fromIntegral $ (value :: AddressOutputs -> Int64) ao)
                              (OutPoint
                                   (fromJust $ hexToTxHash $ DT.pack $ outputTxHash ao)
                                   (fromIntegral $ outputIndex ao))
@@ -99,3 +103,6 @@ getFundingUtxos nexaAddr sk addr rqMileage cursor = do
                     moreUtxos <- getFundingUtxos nexaAddr sk addr (rqMileage - gotSats) (nextCursor resp)
                     return $ selectedUtxos ++ moreUtxos
                 else return selectedUtxos
+
+getFundingUtxoValue :: Int -> Int
+getFundingUtxoValue nameUtxoSats = (nameUtxoSats * 2) + 5000

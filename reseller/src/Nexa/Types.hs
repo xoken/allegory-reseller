@@ -5,16 +5,20 @@
 
 module Nexa.Types where
 
+-- import qualified Codec.Serialise as CBOR
 import Codec.Serialise
 import Control.Exception
 import Data.Aeson
 import Data.ByteString as BS
 import Data.ByteString.Base64 as B64
 import Data.ByteString.Char8 as B8 (pack)
+import Data.Hashable
 import Data.Int
+import Data.Word
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import GHC.Generics
+import Network.Xoken.Transaction
 
 data NexaException
     = AuthException
@@ -142,3 +146,27 @@ data SpendInfo' =
     deriving (Show, Ord, Eq, Read, Generic)
 
 instance FromJSON SpendInfo'
+
+data Tx' =
+    Tx'
+        { txVersion :: !Word32
+        , txIn :: ![TxIn']
+        , txOut :: ![TxOut]
+        , txLockTime :: !Word32
+        }
+    deriving (Show, Read, Eq, Ord, Generic, Hashable, Serialise)
+
+data TxIn' =
+    TxIn'
+        { prevOutput   :: !OutPoint
+        , scriptInput  :: !ByteString
+        , txInSequence :: !Word32
+        , value        :: !Word64
+        }
+    deriving (Eq, Show, Read, Ord, Generic, Hashable, Serialise)
+
+instance ToJSON Tx' where
+    toJSON (Tx' v i o l) = object ["version" .= v, "ins" .= i, "outs" .= o, "locktime" .= l]
+
+instance ToJSON TxIn' where
+    toJSON (TxIn' op scr seq val) = object ["outpoint" .= op, "script" .= scr, "sequence" .= seq , "value" .= val]

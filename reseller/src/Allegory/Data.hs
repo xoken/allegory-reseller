@@ -100,6 +100,7 @@ data Registration =
 instance ToJSON Registration
 
 frameOpReturn :: C.ByteString -> C.ByteString
+-- frameOpReturn = id
 frameOpReturn opReturn = do
     let prefix = (fst . B16.decode) "006a0f416c6c65676f72792f416c6c506179"
     let len = B.length opReturn

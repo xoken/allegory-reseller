@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 module Reseller.Service.Xoken where
 
@@ -64,6 +65,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                 throw e
             Right p' -> return p'
     let producerRoot = forName producer
+    -- let rqMileage = ((length nameArr) - (length producerRoot) -1) + 1
     let rqMileage = (length nameArr) - (length producerRoot)
     let scr = script producer
     let op = outPoint producer
@@ -107,7 +109,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     let allegoryFeeSatsCreate = feeSatsCreate nodeCfg
     let allegoryFeeSatsTransfer = feeSatsTransfer nodeCfg
     let net = bitcoinNetwork nodeCfg
-    let remFunding = (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 remFundInput) - 20000
+    let remFunding = (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 remFundInput) - (getFundingUtxoValue nameUtxoSats)
     let totalEffectiveInputSats = sum $ snd $ unzip $ payips
     let ins =
             ((\si -> TxIn (sigInputOP si) (encodeOutputBS $ sigInputScript si) 0xFFFFFFFF) <$> (nameRoot : remFundInput)) ++
@@ -118,6 +120,10 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                       0xFFFFFFFF) <$>
              ((\ip -> (fst ip, DT.pack "")) <$> payips))
     let sigInputs = nameRoot : remFundInput
+    let values = [nameUtxoSats] ++ (case remFunding of
+                              0 -> []
+                              f -> [f])
+                              ++ (snd <$> payips)
     let outs =
             (if existed
                  then if isProducer
@@ -195,6 +201,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                      let payScript = addressToScriptBS prAddr
                      let changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsCreate)
                      [TxOut 0 opRetScript] ++
+                         [TxOut (fromIntegral nameUtxoSats) prScript] ++
                          (L.map
                               (\x -> do
                                    let addr =
@@ -210,7 +217,8 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                 _ -> [TxOut (fromIntegral remFunding) fundScript]
     let psatx = Tx 1 ins outs 0
     case signTx net psatx sigInputs [nameSecKey, fundSecKey] of
-        Right tx -> return $ BSL.toStrict $ A.encode tx
+        -- Right tx -> return $ BSL.toStrict $ A.encode $ createTx' tx values
+        Right tx -> return $ BSL.toStrict $ A.encode $ tx
         Left err -> do
             liftIO $ print $ "error occured while signing tx: " <> show err
             return BC.empty
@@ -258,7 +266,7 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
             nameScript = addressToScriptBS nameAddr
             fundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ fundSecKey
             fundScript = addressToScriptBS fundAddr
-            remFunding = (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 fundInput) - 20000
+            remFunding = (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 fundInput) - (fromIntegral (getFundingUtxoValue nameUtxoSats))
         debug lg $
             LG.msg $
             "makeProducer: " <> (show name) <> ": got addresses, scripts, remaining funding: " <> (show remFunding)
@@ -317,3 +325,18 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
             Left e -> do
                 err lg $ LG.msg $ "Error: Failed to sign interim producer transaction: " <> (show e)
                 throw KeyValueDBLookupException
+
+createTx' :: Tx -> [Int] -> Tx'
+createTx' (Tx version inputs outs locktime) values = Tx'
+        { txVersion = version
+        , txIn = fmap func $ Prelude.zip inputs values
+        , txOut = outs
+        , txLockTime = locktime
+        }
+    where
+        func (TxIn prevOut scriptIn txInSeq, val) = TxIn'
+         { prevOutput   = prevOut
+         , scriptInput  = scriptIn
+         , txInSequence = txInSeq
+         , value        = fromIntegral val
+         }
