@@ -71,13 +71,13 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     let op = outPoint producer
     let net = bitcoinNetwork nodeCfg
     let nameUtxoSats = nameUtxoSatoshis nodeCfg
-    let nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
+    let nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
     let nameScript = addressToScriptBS nameAddr
     let nameAddr' =
             case addrToString net nameAddr of
                 Nothing -> ""
                 Just t -> DT.unpack t
-    let fundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ fundSecKey
+    let fundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ fundSecKey
     let fundScript = addressToScriptBS fundAddr
     let fundAddr' =
             case addrToString net fundAddr of
@@ -138,7 +138,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                                                Nothing
                                                [])
                               let opRetScript = frameOpReturn $ C.toStrict $ serialise al
-                              let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
+                              let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
                               let prScript = addressToScriptBS prAddr
                               let payScript = addressToScriptBS prAddr
                               let changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsCreate)
@@ -168,7 +168,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                                                      (Registration "addrCommit" "utxoCommit" "signature" 876543)
                                                ])
                               let opRetScript = frameOpReturn $ C.toStrict $ serialise al
-                              let payAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
+                              let payAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
                               let payScript = addressToScriptBS payAddr
                               let changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsTransfer)
                               [TxOut 0 opRetScript] ++
@@ -196,7 +196,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                                             (last nameArr)
                                       ])
                      let opRetScript = frameOpReturn $ C.toStrict $ serialise al
-                     let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
+                     let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
                      let prScript = addressToScriptBS prAddr
                      let payScript = addressToScriptBS prAddr
                      let changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsCreate)
@@ -236,7 +236,7 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
         nodeCfg <- nodeConfig <$> getBitcoinP2P
         nameSecKey <- nameUtxoSecKey <$> getAllegory
         let nameUtxoSats = nameUtxoSatoshis nodeCfg
-            nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
+            nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
             nameScript = addressToScriptBS nameAddr
             nextNameInput =
                 SigInput
@@ -262,9 +262,9 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
         debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": got keys & nexa endpoint " <> (show nexaAddr)
         let net = bitcoinNetwork nodeCfg
             nameUtxoSats = nameUtxoSatoshis nodeCfg
-            nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ nameSecKey
+            nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
             nameScript = addressToScriptBS nameAddr
-            fundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey False $ fundSecKey
+            fundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ fundSecKey
             fundScript = addressToScriptBS fundAddr
             remFunding = (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 fundInput) - (fromIntegral (getFundingUtxoValue nameUtxoSats))
         debug lg $
