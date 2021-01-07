@@ -80,20 +80,11 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
         resellerNutxoAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
         resellerNutxoScriptPubKey = addressToScriptBS resellerNutxoAddr
         resellerPaymentScriptPubKey = addressToScriptBS resellerNutxoAddr
+        resellerFundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ fundSecKey
+        resellerFundScriptPubKey = addressToScriptBS resellerFundAddr
+        resellerFundAddrString = DT.unpack $ fromMaybe "" $ addrToString net resellerFundAddr
     --
     --
-    let nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
-    let nameScript = addressToScriptBS nameAddr
-    let nameAddr' =
-            case addrToString net nameAddr of
-                Nothing -> ""
-                Just t -> DT.unpack t
-    let fundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ fundSecKey
-    let fundScript = addressToScriptBS fundAddr
-    let fundAddr' =
-            case addrToString net fundAddr of
-                Nothing -> ""
-                Just t -> DT.unpack t
     debug lg $ LG.msg $ "xGetPartiallySignedAllegoryTx got producer root: " <> (show producer)
     debug lg $ LG.msg $ "xGetPartiallySignedAllegoryTx need to make " <> (show rqMileage) <> " interim txns"
     (nameRoot, remFundInput, existed) <-
@@ -101,29 +92,22 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
             then do
                 let rootNameInput =
                         SigInput
-                            (addressToOutput nameAddr)
+                            (addressToOutput resellerNutxoAddr)
                             (fromIntegral nameUtxoSats)
                             (OutPoint (fromJust $ hexToTxHash $ DT.pack $ opTxHash op) (fromIntegral $ opIndex op))
                             (setForkIdFlag sigHashAll)
                             Nothing
-                fundingUtxos <- getFundingUtxos nexaAddr sessionKey fundAddr' rqMileage Nothing
+                fundingUtxos <- getFundingUtxos nexaAddr sessionKey resellerFundAddrString rqMileage Nothing
                 return (rootNameInput, fundingUtxos, True)
             else do
-                fundingUtxos <- getFundingUtxos nexaAddr sessionKey fundAddr' rqMileage Nothing
+                fundingUtxos <- getFundingUtxos nexaAddr sessionKey resellerFundAddrString rqMileage Nothing
                 (nameRoot, remFundInput) <- makeProducer (init nameArr) fundingUtxos producerRoot op
                 return (nameRoot, remFundInput, False)
     debug lg $
         LG.msg $
         "xGetPartiallySignedAllegoryTx got nameRoot: " <> (show nameRoot) <> ", remFundInput: " <> (show remFundInput)
     --
-    let paySats = defaultPriceSats nodeCfg
-    let allegoryFeeSatsCreate = feeSatsCreate nodeCfg
-    let allegoryFeeSatsTransfer = feeSatsTransfer nodeCfg
-    let net = bitcoinNetwork nodeCfg
-    let remFunding =
-            (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 remFundInput) - (getFundingUtxoValue nameUtxoSats)
-    let totalEffectiveInputSats = sum $ snd $ unzip $ payips
-    let ins =
+    let inputs =
             ((\si -> TxIn (sigInputOP si) (encodeOutputBS $ sigInputScript si) 0xFFFFFFFF) <$> (nameRoot : remFundInput)) ++
             ((\(x, s) ->
                   TxIn
@@ -131,14 +115,20 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                       (fromJust $ decodeHex s)
                       0xFFFFFFFF) <$>
              ((\ip -> (fst ip, DT.pack "")) <$> payips))
-    let sigInputs = nameRoot : remFundInput
-    let values =
+        sigInputs = nameRoot : remFundInput
+        remFunding =
+            (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 remFundInput) - (getFundingUtxoValue nameUtxoSats)
+        inputValues =
             [nameUtxoSats] ++
             (case remFunding of
                  0 -> []
                  f -> [f]) ++
             (snd <$> payips)
-    let outs =
+        paySats = defaultPriceSats nodeCfg
+        allegoryFeeSatsCreate = feeSatsCreate nodeCfg
+        allegoryFeeSatsTransfer = feeSatsTransfer nodeCfg
+        totalEffectiveInputSats = sum $ snd $ unzip $ payips
+        outputs =
             (if existed
                  then if isProducer
                           then let opRetScript =
@@ -200,10 +190,10 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                           ]) ++
             case (length remFundInput) of
                 0 -> []
-                _ -> [TxOut (fromIntegral remFunding) fundScript]
-    let psatx = Tx 1 ins outs 0
+                _ -> [TxOut (fromIntegral remFunding) resellerFundScriptPubKey]
+    let psatx = Tx 1 inputs outputs 0
     case signTx net psatx sigInputs [nameSecKey, fundSecKey]
-        -- Right tx -> return $ BSL.toStrict $ A.encode $ createTx' tx values
+        -- Right tx -> return $ BSL.toStrict $ A.encode $ createTx' tx inputValues
           of
         Right tx -> return $ BSL.toStrict $ A.encode $ tx
         Left err -> do
@@ -316,8 +306,8 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
                 throw KeyValueDBLookupException
 
 createTx' :: Tx -> [Int] -> Tx'
-createTx' (Tx version inputs outs locktime) values =
-    Tx' {txVersion = version, txIn = fmap func $ Prelude.zip inputs values, txOut = outs, txLockTime = locktime}
+createTx' (Tx version inputs outs locktime) inputValues =
+    Tx' {txVersion = version, txIn = fmap func $ Prelude.zip inputs inputValues, txOut = outs, txLockTime = locktime}
   where
     func (TxIn prevOut scriptIn txInSeq, val) =
         TxIn' {prevOutput = prevOut, scriptInput = scriptIn, txInSequence = txInSeq, value = fromIntegral val}
