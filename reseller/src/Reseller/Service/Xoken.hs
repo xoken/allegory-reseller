@@ -71,6 +71,17 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     let op = outPoint producer
     let net = bitcoinNetwork nodeCfg
     let nameUtxoSats = nameUtxoSatoshis nodeCfg
+    --
+    --
+    let ownerScriptPubKey =
+            addressToScriptBS $ fromMaybe (throw KeyValueDBLookupException) $ stringToAddr net $ DT.pack owner
+        changeScriptPubKey =
+            addressToScriptBS $ fromMaybe (throw KeyValueDBLookupException) $ stringToAddr net $ DT.pack change
+        resellerNutxoAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
+        resellerNutxoScriptPubKey = addressToScriptBS resellerNutxoAddr
+        resellerPaymentScriptPubKey = addressToScriptBS resellerNutxoAddr
+    --
+    --
     let nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
     let nameScript = addressToScriptBS nameAddr
     let nameAddr' =
@@ -109,7 +120,8 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     let allegoryFeeSatsCreate = feeSatsCreate nodeCfg
     let allegoryFeeSatsTransfer = feeSatsTransfer nodeCfg
     let net = bitcoinNetwork nodeCfg
-    let remFunding = (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 remFundInput) - (getFundingUtxoValue nameUtxoSats)
+    let remFunding =
+            (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 remFundInput) - (getFundingUtxoValue nameUtxoSats)
     let totalEffectiveInputSats = sum $ snd $ unzip $ payips
     let ins =
             ((\si -> TxIn (sigInputOP si) (encodeOutputBS $ sigInputScript si) 0xFFFFFFFF) <$> (nameRoot : remFundInput)) ++
@@ -120,104 +132,79 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                       0xFFFFFFFF) <$>
              ((\ip -> (fst ip, DT.pack "")) <$> payips))
     let sigInputs = nameRoot : remFundInput
-    let values = [nameUtxoSats] ++ (case remFunding of
-                              0 -> []
-                              f -> [f])
-                              ++ (snd <$> payips)
+    let values =
+            [nameUtxoSats] ++
+            (case remFunding of
+                 0 -> []
+                 f -> [f]) ++
+            (snd <$> payips)
     let outs =
             (if existed
                  then if isProducer
-                          then do
-                              let al =
-                                      Allegory
-                                          1
-                                          (init nameArr)
-                                          (ProducerAction
-                                               (Index 0)
-                                               (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
-                                               Nothing
-                                               [])
-                              let opRetScript = frameOpReturn $ C.toStrict $ serialise al
-                              let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
-                              let prScript = addressToScriptBS prAddr
-                              let payScript = addressToScriptBS prAddr
-                              let changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsCreate)
-                              [TxOut 0 opRetScript] ++
-                                  (L.map
-                                       (\x -> do
-                                            let addr =
-                                                    case stringToAddr net (DT.pack $ fst x) of
-                                                        Just a -> a
-                                                        Nothing -> throw KeyValueDBLookupException
-                                            let script = addressToScriptBS addr
-                                            TxOut (fromIntegral $ snd x) script)
-                                       [(owner, (fromIntegral $ nameUtxoSats)), (change, changeSats)]) ++
-                                  [TxOut ((fromIntegral paySats) :: Word64) payScript]
-                          else do
-                              let al =
-                                      Allegory
-                                          1
-                                          (nameArr)
-                                          (OwnerAction
-                                               (Index 0)
-                                               (OwnerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
-                                               [ ProxyProvider
-                                                     "AllPay"
-                                                     "Public"
-                                                     (Endpoint "XokenP2P" "someuri_2")
-                                                     (Registration "addrCommit" "utxoCommit" "signature" 876543)
-                                               ])
-                              let opRetScript = frameOpReturn $ C.toStrict $ serialise al
-                              let payAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
-                              let payScript = addressToScriptBS payAddr
-                              let changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsTransfer)
-                              [TxOut 0 opRetScript] ++
-                                  (L.map
-                                       (\x -> do
-                                            let addr =
-                                                    case stringToAddr net (DT.pack $ fst x) of
-                                                        Just a -> a
-                                                        Nothing -> throw KeyValueDBLookupException
-                                            let script = addressToScriptBS addr
-                                            TxOut (fromIntegral $ snd x) script)
-                                       [(owner, (fromIntegral $ nameUtxoSats)), (change, changeSats)]) ++
-                                  [TxOut ((fromIntegral paySats) :: Word64) payScript]
-                 else do
-                     let al =
-                             Allegory
-                                 1
-                                 (init nameArr)
-                                 (ProducerAction
-                                      (Index 0)
-                                      (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
-                                      Nothing
-                                      [ OwnerExtension
-                                            (OwnerOutput (Index 2) (Just $ Endpoint "XokenP2P" "someuri_3"))
-                                            (last nameArr)
-                                      ])
-                     let opRetScript = frameOpReturn $ C.toStrict $ serialise al
-                     let prAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
-                     let prScript = addressToScriptBS prAddr
-                     let payScript = addressToScriptBS prAddr
-                     let changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsCreate)
-                     [TxOut 0 opRetScript] ++
-                         [TxOut (fromIntegral nameUtxoSats) prScript] ++
-                         (L.map
-                              (\x -> do
-                                   let addr =
-                                           case stringToAddr net (DT.pack $ fst x) of
-                                               Just a -> a
-                                               Nothing -> throw KeyValueDBLookupException
-                                   let script = addressToScriptBS addr
-                                   TxOut (fromIntegral $ snd x) script)
-                              [(owner, (fromIntegral $ nameUtxoSats)), (change, changeSats)]) ++
-                         [TxOut ((fromIntegral paySats) :: Word64) payScript]) ++
+                          then let opRetScript =
+                                       frameOpReturn $
+                                       C.toStrict $
+                                       serialise $
+                                       Allegory
+                                           1
+                                           nameArr
+                                           (ProducerAction
+                                                (Index 0)
+                                                (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                                Nothing
+                                                [])
+                                   changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsCreate)
+                                in [ TxOut 0 opRetScript
+                                   , TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey
+                                   , TxOut (fromIntegral changeSats) changeScriptPubKey
+                                   , TxOut (fromIntegral paySats) resellerPaymentScriptPubKey
+                                   ]
+                          else let opRetScript =
+                                       frameOpReturn $
+                                       C.toStrict $
+                                       serialise $
+                                       Allegory
+                                           1
+                                           nameArr
+                                           (OwnerAction
+                                                (Index 0)
+                                                (OwnerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                                [])
+                                   changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsTransfer)
+                                in [ TxOut 0 opRetScript
+                                   , TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey
+                                   , TxOut (fromIntegral changeSats) changeScriptPubKey
+                                   , TxOut (fromIntegral paySats) resellerPaymentScriptPubKey
+                                   ]
+                 else let opRetScript =
+                              frameOpReturn $
+                              C.toStrict $
+                              serialise $
+                              Allegory
+                                  1
+                                  (init nameArr)
+                                  (ProducerAction
+                                       (Index 0)
+                                       (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                       Nothing
+                                       [ OwnerExtension
+                                             (OwnerOutput (Index 2) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                             (last nameArr)
+                                       ])
+                          changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsCreate)
+                       in [ TxOut 0 opRetScript
+                          , TxOut (fromIntegral nameUtxoSats) resellerNutxoScriptPubKey
+                          , TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey
+                          , TxOut (fromIntegral changeSats) changeScriptPubKey
+                          , TxOut (fromIntegral paySats) resellerPaymentScriptPubKey
+                          ]) ++
             case (length remFundInput) of
                 0 -> []
                 _ -> [TxOut (fromIntegral remFunding) fundScript]
     let psatx = Tx 1 ins outs 0
-    case signTx net psatx sigInputs [nameSecKey, fundSecKey] of
+    case signTx net psatx sigInputs [nameSecKey, fundSecKey]
         -- Right tx -> return $ BSL.toStrict $ A.encode $ createTx' tx values
+          of
         Right tx -> return $ BSL.toStrict $ A.encode $ tx
         Left err -> do
             liftIO $ print $ "error occured while signing tx: " <> show err
@@ -266,7 +253,9 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
             nameScript = addressToScriptBS nameAddr
             fundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ fundSecKey
             fundScript = addressToScriptBS fundAddr
-            remFunding = (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 fundInput) - (fromIntegral (getFundingUtxoValue nameUtxoSats))
+            remFunding =
+                (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 fundInput) -
+                (fromIntegral (getFundingUtxoValue nameUtxoSats))
         debug lg $
             LG.msg $
             "makeProducer: " <> (show name) <> ": got addresses, scripts, remaining funding: " <> (show remFunding)
@@ -327,16 +316,8 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
                 throw KeyValueDBLookupException
 
 createTx' :: Tx -> [Int] -> Tx'
-createTx' (Tx version inputs outs locktime) values = Tx'
-        { txVersion = version
-        , txIn = fmap func $ Prelude.zip inputs values
-        , txOut = outs
-        , txLockTime = locktime
-        }
-    where
-        func (TxIn prevOut scriptIn txInSeq, val) = TxIn'
-         { prevOutput   = prevOut
-         , scriptInput  = scriptIn
-         , txInSequence = txInSeq
-         , value        = fromIntegral val
-         }
+createTx' (Tx version inputs outs locktime) values =
+    Tx' {txVersion = version, txIn = fmap func $ Prelude.zip inputs values, txOut = outs, txLockTime = locktime}
+  where
+    func (TxIn prevOut scriptIn txInSeq, val) =
+        TxIn' {prevOutput = prevOut, scriptInput = scriptIn, txInSequence = txInSeq, value = fromIntegral val}
