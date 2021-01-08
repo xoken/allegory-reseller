@@ -130,42 +130,24 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
         totalEffectiveInputSats = sum $ snd $ unzip $ payips
         outputs =
             (if existed
-                 then if isProducer
-                          then let opRetScript =
-                                       frameOpReturn $
-                                       C.toStrict $
-                                       serialise $
-                                       Allegory
-                                           1
-                                           nameArr
-                                           (ProducerAction
-                                                (Index 0)
-                                                (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
-                                                Nothing
-                                                [])
-                                   changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsCreate)
-                                in [ TxOut 0 opRetScript
-                                   , TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey
-                                   , TxOut (fromIntegral changeSats) changeScriptPubKey
-                                   , TxOut (fromIntegral paySats) resellerPaymentScriptPubKey
-                                   ]
-                          else let opRetScript =
-                                       frameOpReturn $
-                                       C.toStrict $
-                                       serialise $
-                                       Allegory
-                                           1
-                                           nameArr
-                                           (OwnerAction
-                                                (Index 0)
-                                                (OwnerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
-                                                [])
-                                   changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsTransfer)
-                                in [ TxOut 0 opRetScript
-                                   , TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey
-                                   , TxOut (fromIntegral changeSats) changeScriptPubKey
-                                   , TxOut (fromIntegral paySats) resellerPaymentScriptPubKey
-                                   ]
+                 then let action =
+                              if isProducer
+                                  then (ProducerAction
+                                            (Index 0)
+                                            (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                            Nothing
+                                            [])
+                                  else (OwnerAction
+                                            (Index 0)
+                                            (OwnerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                            [])
+                          opRetScript = frameOpReturn $ C.toStrict $ serialise $ Allegory 1 nameArr action
+                          changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsTransfer)
+                       in [ TxOut 0 opRetScript
+                          , TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey
+                          , TxOut (fromIntegral changeSats) changeScriptPubKey
+                          , TxOut (fromIntegral paySats) resellerPaymentScriptPubKey
+                          ]
                  else let opRetScript =
                               frameOpReturn $
                               C.toStrict $
