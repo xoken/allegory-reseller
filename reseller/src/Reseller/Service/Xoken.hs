@@ -122,7 +122,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
             [nameUtxoSats] ++
             (case remFunding of
                  0 -> []
-                 f -> [f]) ++
+                 f -> [(foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 remFundInput)]) ++
             (snd <$> payips)
         paySats = defaultPriceSats nodeCfg
         allegoryFeeSatsCreate = feeSatsCreate nodeCfg
