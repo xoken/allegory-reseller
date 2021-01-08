@@ -66,7 +66,11 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
             Right p' -> return p'
     let producerRoot = forName producer
     -- let rqMileage = ((length nameArr) - (length producerRoot) -1) + 1
-    let rqMileage = (length nameArr) - (length producerRoot)
+    let rqMileage =
+            ((length nameArr) - (length producerRoot)) +
+            if isProducer
+                then 1
+                else 0 -- will need funding for 1 extra output
     let scr = script producer
     let op = outPoint producer
     let net = bitcoinNetwork nodeCfg
@@ -148,26 +152,37 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                           , TxOut (fromIntegral changeSats) changeScriptPubKey
                           , TxOut (fromIntegral paySats) resellerPaymentScriptPubKey
                           ]
-                 else let opRetScript =
-                              frameOpReturn $
-                              C.toStrict $
-                              serialise $
-                              Allegory
-                                  1
-                                  (init nameArr)
-                                  (ProducerAction
-                                       (Index 0)
-                                       (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
-                                       Nothing
-                                       [ OwnerExtension
-                                             (OwnerOutput (Index 2) (Just $ Endpoint "XokenP2P" "someuri_1"))
-                                             (last nameArr)
-                                       ])
+                 else let (action, ownerOutput) =
+                              if isProducer
+                                  then ( ProducerAction
+                                             (Index 0)
+                                             (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                             Nothing
+                                             [ (ProducerExtension
+                                                    (ProducerOutput (Index 2) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                                    (last nameArr))
+                                             , (OwnerExtension
+                                                    (OwnerOutput (Index 3) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                                    (last nameArr))
+                                             ]
+                                       , [TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey])
+                                  else ( ProducerAction
+                                             (Index 0)
+                                             (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                             Nothing
+                                             [ OwnerExtension
+                                                   (OwnerOutput (Index 2) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                                   (last nameArr)
+                                             ]
+                                       , [])
+                          opRetScript = frameOpReturn $ C.toStrict $ serialise $ Allegory 1 (init nameArr) action
                           changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsCreate)
                        in [ TxOut 0 opRetScript
                           , TxOut (fromIntegral nameUtxoSats) resellerNutxoScriptPubKey
                           , TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey
-                          , TxOut (fromIntegral changeSats) changeScriptPubKey
+                          ] ++
+                          ownerOutput ++
+                          [ TxOut (fromIntegral changeSats) changeScriptPubKey
                           , TxOut (fromIntegral paySats) resellerPaymentScriptPubKey
                           ]) ++
             case (length remFundInput) of
