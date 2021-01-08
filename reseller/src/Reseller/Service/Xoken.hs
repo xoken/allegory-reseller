@@ -174,10 +174,9 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                 0 -> []
                 _ -> [TxOut (fromIntegral remFunding) resellerFundScriptPubKey]
     let psatx = Tx 1 inputs outputs 0
-    case signTx net psatx sigInputs [nameSecKey, fundSecKey]
-        -- Right tx -> return $ BSL.toStrict $ A.encode $ createTx' tx inputValues
-          of
-        Right tx -> return $ BSL.toStrict $ A.encode $ tx
+    case signTx net psatx sigInputs [nameSecKey, fundSecKey] of
+        Right tx -> return $ BSL.toStrict $ A.encode $ createTx' tx inputValues
+        --Right tx -> return $ BSL.toStrict $ A.encode $ tx
         Left err -> do
             liftIO $ print $ "error occured while signing tx: " <> show err
             return BC.empty
