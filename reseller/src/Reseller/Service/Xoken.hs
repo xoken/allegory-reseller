@@ -32,7 +32,7 @@ import Nexa
 import Nexa.Constants
 import Nexa.Types
 import qualified Nexa.Types as AO (AddressOutputs(..))
-import NodeConfig
+import qualified NodeConfig as NC
 import Prelude
 import Reseller.Common
 import Reseller.Env
@@ -42,7 +42,7 @@ import Xoken
 
 xGetPartiallySignedAllegoryTx ::
        (MonadHttp m, HasResellerEnv env m, MonadIO m)
-    => NodeConfig
+    => NC.NodeConfig
     -> [(OutPoint', Int)]
     -> ([Int], Bool)
     -> (String)
@@ -56,7 +56,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     sessionKey <- nexaSessionKey <$> getNexaEnv
     nameSecKey <- nameUtxoSecKey <$> getAllegory
     fundSecKey <- fundUtxoSecKey <$> getAllegory
-    nexaAddr <- (\nc -> return $ nexaListenIP nc <> ":" <> (show $ nexaListenPort nc)) $ (nodeConfig bp2pEnv)
+    nexaAddr <- (\nc -> return $ NC.nexaListenIP nc <> ":" <> (show $ NC.nexaListenPort nc)) $ (nodeConfig bp2pEnv)
     res <- LE.try $ liftIO $ getProducer nexaAddr sessionKey nameArr isProducer
     producer <-
         case res of
@@ -73,8 +73,8 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                 else 0 -- will need funding for 1 extra output
     let scr = script producer
     let op = outPoint producer
-    let net = bitcoinNetwork nodeCfg
-    let nameUtxoSats = nameUtxoSatoshis nodeCfg
+    let net = NC.bitcoinNetwork nodeCfg
+    let nameUtxoSats = NC.nameUtxoSatoshis nodeCfg
     --
     --
     let ownerScriptPubKey =
@@ -87,6 +87,7 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
         resellerFundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ fundSecKey
         resellerFundScriptPubKey = addressToScriptBS resellerFundAddr
         resellerFundAddrString = DT.unpack $ fromMaybe "" $ addrToString net resellerFundAddr
+        resellerUri = NC.resellerUri nodeCfg
     --
     --
     debug lg $ LG.msg $ "xGetPartiallySignedAllegoryTx got producer root: " <> (show producer)
@@ -128,9 +129,9 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                  0 -> []
                  f -> [(foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 remFundInput)]) ++
             (snd <$> payips)
-        paySats = defaultPriceSats nodeCfg
-        allegoryFeeSatsCreate = feeSatsCreate nodeCfg
-        allegoryFeeSatsTransfer = feeSatsTransfer nodeCfg
+        paySats = NC.defaultPriceSats nodeCfg
+        allegoryFeeSatsCreate = NC.feeSatsCreate nodeCfg
+        allegoryFeeSatsTransfer = NC.feeSatsTransfer nodeCfg
         totalEffectiveInputSats = sum $ snd $ unzip $ payips
         outputs =
             (if existed
@@ -138,12 +139,12 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                               if isProducer
                                   then (ProducerAction
                                             (Index 0)
-                                            (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                            (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "buyer_uri"))
                                             Nothing
                                             [])
                                   else (OwnerAction
                                             (Index 0)
-                                            (OwnerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                            (OwnerOutput (Index 1) (Just $ Endpoint "XokenP2P" "buyer_uri"))
                                             [])
                           opRetScript = frameOpReturn $ C.toStrict $ serialise $ Allegory 1 nameArr action
                           changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsTransfer)
@@ -156,22 +157,22 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                               if isProducer
                                   then ( ProducerAction
                                              (Index 0)
-                                             (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                             (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" resellerUri))
                                              Nothing
                                              [ (ProducerExtension
-                                                    (ProducerOutput (Index 2) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                                    (ProducerOutput (Index 2) (Just $ Endpoint "XokenP2P" "buyer_uri"))
                                                     (last nameArr))
                                              , (OwnerExtension
-                                                    (OwnerOutput (Index 3) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                                    (OwnerOutput (Index 3) (Just $ Endpoint "XokenP2P" "buyer_uri"))
                                                     (last nameArr))
                                              ]
                                        , [TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey])
                                   else ( ProducerAction
                                              (Index 0)
-                                             (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                             (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" resellerUri))
                                              Nothing
                                              [ OwnerExtension
-                                                   (OwnerOutput (Index 2) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                                                   (OwnerOutput (Index 2) (Just $ Endpoint "XokenP2P" "buyer_uri"))
                                                    (last nameArr)
                                              ]
                                        , [])
@@ -208,7 +209,7 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
         lg <- getLogger
         nodeCfg <- nodeConfig <$> getBitcoinP2P
         nameSecKey <- nameUtxoSecKey <$> getAllegory
-        let nameUtxoSats = nameUtxoSatoshis nodeCfg
+        let nameUtxoSats = NC.nameUtxoSatoshis nodeCfg
             nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
             nameScript = addressToScriptBS nameAddr
             nextNameInput =
@@ -231,14 +232,15 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
         sessionKey <- nexaSessionKey <$> getNexaEnv
         nameSecKey <- nameUtxoSecKey <$> getAllegory
         fundSecKey <- fundUtxoSecKey <$> getAllegory
-        nexaAddr <- (\nc -> return $ nexaListenIP nc <> ":" <> (show $ nexaListenPort nc)) $ (nodeConfig bp2pEnv)
+        nexaAddr <- (\nc -> return $ NC.nexaListenIP nc <> ":" <> (show $ NC.nexaListenPort nc)) $ (nodeConfig bp2pEnv)
         debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": got keys & nexa endpoint " <> (show nexaAddr)
-        let net = bitcoinNetwork nodeCfg
-            nameUtxoSats = nameUtxoSatoshis nodeCfg
+        let net = NC.bitcoinNetwork nodeCfg
+            nameUtxoSats = NC.nameUtxoSatoshis nodeCfg
             nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
             nameScript = addressToScriptBS nameAddr
             fundAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ fundSecKey
             fundScript = addressToScriptBS fundAddr
+            resellerUri = NC.resellerUri nodeCfg
             remFunding =
                 (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 fundInput) -
                 (fromIntegral (getFundingUtxoValue nameUtxoSats))
@@ -255,12 +257,12 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
                     (init name)
                     (ProducerAction
                          (Index 0)
-                         (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "someuri_1"))
+                         (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" resellerUri))
                          Nothing
                          [ (ProducerExtension
-                                (ProducerOutput (Index 2) (Just $ Endpoint "XokenP2P" "someuri_2"))
+                                (ProducerOutput (Index 2) (Just $ Endpoint "XokenP2P" resellerUri))
                                 (last name))
-                         , (OwnerExtension (OwnerOutput (Index 3) (Just $ Endpoint "XokenP2P" "someuri_3")) (last name))
+                         , (OwnerExtension (OwnerOutput (Index 3) (Just $ Endpoint "XokenP2P" resellerUri)) (last name))
                          ])
         let opRetScript = frameOpReturn $ C.toStrict $ serialise al
         let outs =

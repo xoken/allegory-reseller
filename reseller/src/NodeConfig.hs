@@ -40,6 +40,7 @@ data NodeConfig =
         , feeSatsCreate :: !Int
         , feeSatsTransfer :: !Int
         , nameUtxoSatoshis :: !Int
+        , resellerUri :: String
         , nexaListenIP :: !String
         , nexaListenPort :: !PortNumber
         , nexaUsername :: !String
