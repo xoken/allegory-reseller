@@ -107,6 +107,7 @@ data ReqParams'
           , gpsaName :: ([Int], Bool) -- name & isProducer
           , gpsaOutputOwner :: String
           , gpsaOutputChange :: String
+          , gpsaBuyerUri :: String
           }
     | RelayTx
           { rTx :: ByteString
@@ -122,7 +123,8 @@ instance FromJSON ReqParams' where
         (UserByUsername <$> o .: "username") <|>
         (UpdateUserByUsername <$> o .: "username" <*> o .: "updateData") <|>
         (GetPartiallySignedAllegoryTx <$> o .: "paymentInputs" <*> o .: "name" <*> o .: "outputOwner" <*>
-         o .: "outputChange") <|>
+         o .: "outputChange" <*>
+         o .: "buyerUri") <|>
         (RelayTx . B64.decodeLenient . T.encodeUtf8 <$> o .: "rawTx")
 
 data ResponseBody

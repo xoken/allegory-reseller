@@ -121,7 +121,13 @@ getPartiallySignedAllegoryTx GetPartiallySignedAllegoryTx {..} = do
     bp2pEnv <- getBitcoinP2P
     res <-
         LE.try $
-        xGetPartiallySignedAllegoryTx (nodeConfig bp2pEnv) gpsaPaymentInputs gpsaName gpsaOutputOwner gpsaOutputChange
+        xGetPartiallySignedAllegoryTx
+            (nodeConfig bp2pEnv)
+            gpsaPaymentInputs
+            gpsaName
+            gpsaOutputOwner
+            gpsaOutputChange
+            gpsaBuyerUri
     case res of
         Left (e :: SomeException) -> do
             modifyResponse $ setResponseStatus 500 "Internal Server Error"

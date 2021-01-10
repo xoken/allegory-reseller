@@ -45,10 +45,11 @@ xGetPartiallySignedAllegoryTx ::
     => NC.NodeConfig
     -> [(OutPoint', Int)]
     -> ([Int], Bool)
-    -> (String)
-    -> (String)
+    -> String
+    -> String
+    -> String
     -> m (BC.ByteString)
-xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change = do
+xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change buyerUri = do
     lg <- getLogger
     debug lg $ LG.msg $ "xGetPartiallySignedAllegoryTx called: nameArr: " <> (show nameArr)
     bp2pEnv <- getBitcoinP2P
@@ -139,12 +140,12 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                               if isProducer
                                   then (ProducerAction
                                             (Index 0)
-                                            (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" "buyer_uri"))
+                                            (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" buyerUri))
                                             Nothing
                                             [])
                                   else (OwnerAction
                                             (Index 0)
-                                            (OwnerOutput (Index 1) (Just $ Endpoint "XokenP2P" "buyer_uri"))
+                                            (OwnerOutput (Index 1) (Just $ Endpoint "XokenP2P" buyerUri))
                                             [])
                           opRetScript = frameOpReturn $ C.toStrict $ serialise $ Allegory 1 nameArr action
                           changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsTransfer)
@@ -153,36 +154,35 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                           , TxOut (fromIntegral changeSats) changeScriptPubKey
                           , TxOut (fromIntegral paySats) resellerPaymentScriptPubKey
                           ]
-                 else let (action, ownerOutput) =
+                 else let action =
+                              ProducerAction
+                                  (Index 0)
+                                  (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" resellerUri))
+                                  Nothing $
+                              OwnerExtension
+                                  (OwnerOutput (Index 2) (Just $ Endpoint "XokenP2P" buyerUri))
+                                  (last nameArr) :
                               if isProducer
-                                  then ( ProducerAction
-                                             (Index 0)
-                                             (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" resellerUri))
-                                             Nothing
-                                             [ (ProducerExtension
-                                                    (ProducerOutput (Index 2) (Just $ Endpoint "XokenP2P" "buyer_uri"))
-                                                    (last nameArr))
-                                             , (OwnerExtension
-                                                    (OwnerOutput (Index 3) (Just $ Endpoint "XokenP2P" "buyer_uri"))
-                                                    (last nameArr))
-                                             ]
-                                       , [TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey])
-                                  else ( ProducerAction
-                                             (Index 0)
-                                             (ProducerOutput (Index 1) (Just $ Endpoint "XokenP2P" resellerUri))
-                                             Nothing
-                                             [ OwnerExtension
-                                                   (OwnerOutput (Index 2) (Just $ Endpoint "XokenP2P" "buyer_uri"))
-                                                   (last nameArr)
-                                             ]
-                                       , [])
+                                  then [ ProducerExtension
+                                             (ProducerOutput (Index 3) (Just $ Endpoint "XokenP2P" buyerUri))
+                                             (last nameArr)
+                                       ]
+                                  else []
                           opRetScript = frameOpReturn $ C.toStrict $ serialise $ Allegory 1 (init nameArr) action
-                          changeSats = totalEffectiveInputSats - (paySats + allegoryFeeSatsCreate)
+                          changeSats =
+                              totalEffectiveInputSats -
+                              (paySats +
+                               (if isProducer
+                                    then 2
+                                    else 1) *
+                               allegoryFeeSatsCreate)
                        in [ TxOut 0 opRetScript
                           , TxOut (fromIntegral nameUtxoSats) resellerNutxoScriptPubKey
                           , TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey
                           ] ++
-                          ownerOutput ++
+                          (if isProducer
+                               then [TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey]
+                               else []) ++
                           [ TxOut (fromIntegral changeSats) changeScriptPubKey
                           , TxOut (fromIntegral paySats) resellerPaymentScriptPubKey
                           ]) ++
