@@ -11,8 +11,8 @@ import qualified Data.ByteString.Char8 as BC
 import Data.Int
 import Data.List
 import Data.Maybe
-import Data.Word
 import qualified Data.Text as DT
+import Data.Word
 import Network.HTTP.Client
 import Network.Xoken.Address
 import Network.Xoken.Script
@@ -43,7 +43,7 @@ showSI (SigInput _ v (OutPoint h i) _ _) = show $ ((h, i), v)
 
 getFundingUtxos ::
        (HasResellerEnv env m, MonadIO m) => String -> SessionKey -> String -> Int -> Maybe String -> m [SigInput]
-getFundingUtxos nexaAddr sk addr rqMileage cursor = do
+getFundingUtxos nexaAddr sk addr requiredSats cursor = do
     lg <- getLogger
     net <- (return . bitcoinNetwork) =<< (nodeConfig <$> getBitcoinP2P)
     let req = utxosByAddressRequest nexaAddr addr 10 cursor
@@ -62,9 +62,6 @@ getFundingUtxos nexaAddr sk addr rqMileage cursor = do
                             LG.msg $ show "Error: Failed to decode '" <> addr <> "' as a " <> (show net) <> " address"
                         throw ResponseParseException
                     Just a' -> return $ addressToOutput a'
-            nodeCfg <- nodeConfig <$> getBitcoinP2P
-            let nameUtxoSats = nameUtxoSatoshis nodeCfg
-            let requiredSats = rqMileage * (getFundingUtxoValue (fromIntegral nameUtxoSats))
             debug lg $ LG.msg $ "<getFundingUtxos> address = " <> addr <> ": required sats: " <> (show requiredSats)
             let fundingUtxos =
                     sortOn sigInputValue $
@@ -100,9 +97,6 @@ getFundingUtxos nexaAddr sk addr rqMileage cursor = do
             if (length selectedUtxos == length fundingUtxos) && (gotSats < requiredSats)
                 then do
                     debug lg $ LG.msg $ "<getFundingUtxos> address = " <> addr <> ": requesting next page of utxos..."
-                    moreUtxos <- getFundingUtxos nexaAddr sk addr (rqMileage - gotSats) (nextCursor resp)
+                    moreUtxos <- getFundingUtxos nexaAddr sk addr (requiredSats - gotSats) (nextCursor resp)
                     return $ selectedUtxos ++ moreUtxos
                 else return selectedUtxos
-
-getFundingUtxoValue :: Int -> Int
-getFundingUtxoValue nameUtxoSats = (nameUtxoSats * 2) + 5000
