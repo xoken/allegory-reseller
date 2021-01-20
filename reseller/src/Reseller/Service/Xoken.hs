@@ -79,14 +79,16 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
             Right p' -> return p'
     let producerRoot = forName producer
     -- let rqMileage = ((length nameArr) - (length producerRoot) -1) + 1
-    let rqMileage =
-            ((length nameArr) - (length producerRoot)) +
-            if isProducer
-                then 1
-                else 0 -- will need funding for 1 extra output
+    let nameUtxoSats = NC.nameUtxoSatoshis nodeCfg
+        rqFundingSats =
+            (getFundingUtxoValue nameUtxoSats) *
+            (((length nameArr) - (length producerRoot)) +
+             if isProducer
+                 then 1
+                 else 0 -- will need funding for 1 extra output
+             )
     let scr = script producer
     let op = outPoint producer
-    let nameUtxoSats = NC.nameUtxoSatoshis nodeCfg
     --
     --
     let ownerScriptPubKey =
@@ -103,7 +105,10 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     --
     --
     debug lg $ LG.msg $ "xGetPartiallySignedAllegoryTx got producer root: " <> (show producer)
-    debug lg $ LG.msg $ "xGetPartiallySignedAllegoryTx need to make " <> (show rqMileage) <> " interim txns"
+    debug lg $
+        LG.msg $
+        "xGetPartiallySignedAllegoryTx needs to make " <> (show $ (length nameArr) - (length producerRoot)) <>
+        " interim txns"
     (nameRoot, remFundInput, existed) <-
         if producerRoot == nameArr
             then do
@@ -114,10 +119,10 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                             (OutPoint (fromJust $ hexToTxHash $ DT.pack $ opTxHash op) (fromIntegral $ opIndex op))
                             (setForkIdFlag sigHashAll)
                             Nothing
-                fundingUtxos <- getFundingUtxos nexaAddr sessionKey resellerFundAddrString rqMileage Nothing
+                fundingUtxos <- getFundingUtxos nexaAddr sessionKey resellerFundAddrString rqFundingSats Nothing
                 return (rootNameInput, fundingUtxos, True)
             else do
-                fundingUtxos <- getFundingUtxos nexaAddr sessionKey resellerFundAddrString rqMileage Nothing
+                fundingUtxos <- getFundingUtxos nexaAddr sessionKey resellerFundAddrString rqFundingSats Nothing
                 (nameRoot, remFundInput) <- makeProducer (init nameArr) fundingUtxos producerRoot op
                 return (nameRoot, remFundInput, False)
     debug lg $
@@ -313,6 +318,9 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
             Left e -> do
                 err lg $ LG.msg $ "Error: Failed to sign interim producer transaction: " <> (show e)
                 throw KeyValueDBLookupException
+
+getFundingUtxoValue :: Int -> Int
+getFundingUtxoValue ns = (ns * 2) + 5000
 
 createTx' :: Tx -> [Int] -> Tx'
 createTx' (Tx version inputs outs locktime) inputValues =
