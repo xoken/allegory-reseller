@@ -14,6 +14,7 @@ import Control.Monad.IO.Class
 import Control.Monad.IO.Unlift
 import Control.Monad.Trans.Control
 import Data.Aeson as A
+import Data.Aeson.Types (parse)
 import qualified Data.ByteString as BS (unpack)
 import qualified Data.ByteString.Base16 as B16 (decode, encode)
 import Data.ByteString.Base64 as B64
@@ -56,9 +57,20 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     nodeCfg <- nodeConfig <$> getBitcoinP2P
     sessionKey <- nexaSessionKey <$> getNexaEnv
     nameSecKey <- nameUtxoSecKey <$> getAllegory
+    -- xPrivKey' <- xPrivKey <$> getAllegory
     fundSecKey <- fundUtxoSecKey <$> getAllegory
+    let net = NC.bitcoinNetwork nodeCfg
     nexaAddr <- (\nc -> return $ NC.nexaListenIP nc <> ":" <> (show $ NC.nexaListenPort nc)) $ (nodeConfig bp2pEnv)
     res <- LE.try $ liftIO $ getProducer nexaAddr sessionKey nameArr isProducer
+    -- let xpub = A.String $ DT.pack nameXPubKey
+    -- x <- case parse Prelude.id . xPrvFromJSON net $ xpub of
+    --             Success k -> return k
+    --             A.Error e -> do
+    --                 err lg $ LG.msg $ "Error: Failed to decode xpub " <> (show e)
+    --                 throw KeyValueDBLookupException
+    -- let testAddr = fst $ derivePathAddr (deriveXPubKey x) (Deriv :/ 44 :/ 1 :/ 1 :/0 :: SoftPath) 1
+    -- debug lg $ LG.msg $ "Test Addr " <> (show testAddr)
+    -- let nameAddr = fst $ derivePathAddr x (Deriv :/ 44 :/ 1 :/ 1 :/0 :: SoftPath) 1
     producer <-
         case res of
             Left (e :: SomeException) -> do
@@ -74,7 +86,6 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                 else 0 -- will need funding for 1 extra output
     let scr = script producer
     let op = outPoint producer
-    let net = NC.bitcoinNetwork nodeCfg
     let nameUtxoSats = NC.nameUtxoSatoshis nodeCfg
     --
     --

@@ -12,6 +12,7 @@ import Control.Monad.Reader
 import Control.Monad.Trans.Control
 import Crypto.Secp256k1
 import qualified Data.HashTable.IO as H
+import Data.ByteString
 import Data.Hashable
 import Data.Int
 import qualified Data.Map.Strict as M
@@ -20,6 +21,7 @@ import Data.Time.Clock
 import Data.Word
 import GHC.Generics
 import NodeConfig
+import Network.Xoken.Keys
 import Prelude
 import System.Logger
 
@@ -51,6 +53,7 @@ data BitcoinP2P =
 data AllegoryEnv =
     AllegoryEnv
         { nameUtxoSecKey :: !SecKey
+        , xPrivKey :: !String
         , fundUtxoSecKey :: !SecKey
         }
 

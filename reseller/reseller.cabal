@@ -120,6 +120,7 @@ executable reseller
     , vformat
     , daemons
     , snap
+    , snap-core
     , lens
     , connection
     , http-client

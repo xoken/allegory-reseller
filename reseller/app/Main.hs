@@ -42,6 +42,8 @@ import Crypto.Cipher.Types
 import Crypto.Error
 import Crypto.KDF.Scrypt (Parameters(..), generate)
 import Crypto.Secp256k1
+import Data.Aeson as A
+import Data.Aeson.Types (parse)
 import Data.Aeson.Encoding (encodingToLazyByteString, fromEncoding)
 import Data.Bits
 import qualified Data.ByteString as B
@@ -87,7 +89,7 @@ import Network.Xoken.Keys
 import Network.Xoken.Util
 import Nexa
 import Nexa.Auth
-import NodeConfig
+import NodeConfig as NC
 import Options.Applicative
 import Paths_reseller as P
 import Prelude as P
@@ -107,6 +109,7 @@ import qualified System.Logger.Class as LGC
 import System.Posix.Daemon
 import System.Random
 import Text.Read (readMaybe)
+import Prelude
 
 data ConfigException
     = ConfigParseException
@@ -117,8 +120,8 @@ instance Exception ConfigException
 
 type HashTable k v = H.BasicHashTable k v
 
-runThreads :: (SecKey, SecKey) -> NodeConfig -> BitcoinP2P -> LG.Logger -> [FilePath] -> IO ()
-runThreads (nsk, fsk) nodeConf bitcoinP2PEnv lg certPaths = do
+runThreads :: (SecKey, String, SecKey) -> NodeConfig -> BitcoinP2P -> LG.Logger -> [FilePath] -> IO ()
+runThreads (nsk, xPrivKey, fsk) nodeConf bitcoinP2PEnv lg certPaths = do
     putStrLn $ "Acquiring Nexa session key for user " <> (nexaUsername nodeConf) <> "..."
     sessionKey <-
         (\k ->
@@ -130,7 +133,7 @@ runThreads (nsk, fsk) nodeConf bitcoinP2PEnv lg certPaths = do
              (nexaUsername nodeConf)
              (nexaPassword nodeConf))
     putStrLn $ "Acquired Nexa session key: " <> (show sessionKey)
-    let allegoryEnv = AllegoryEnv nsk fsk
+    let allegoryEnv = AllegoryEnv nsk xPrivKey fsk
     let nexaEnv = NexaEnv sessionKey
     let xknEnv = ResellerEnv lg bitcoinP2PEnv allegoryEnv nexaEnv
     -- start HTTP endpoint
@@ -142,7 +145,7 @@ runThreads (nsk, fsk) nodeConf bitcoinP2PEnv lg certPaths = do
             Snap.setSSLChainCert False
     Snap.serveSnaplet snapConfig (appInit xknEnv)
 
-runNode :: (SecKey, SecKey) -> NodeConfig -> BitcoinP2P -> [FilePath] -> IO ()
+runNode :: (SecKey, String, SecKey) -> NodeConfig -> BitcoinP2P -> [FilePath] -> IO ()
 runNode secKeys nodeConf bitcoinP2PEnv certPaths = do
     lg <-
         LG.new
@@ -164,14 +167,28 @@ initReseller = do
         csrFP = tlsCertificateStorePath nodeCnf
         host = nexaListenIP nodeCnf <> ":" <> (show $ nexaListenPort nodeCnf)
         nsk = nameUtxoSecretKey nodeCnf
+        xPrivKey' = NC.xPrivKey nodeCnf
         fsk = fundUtxoSecretKey nodeCnf
         user = nexaUsername nodeCnf
         pass = nexaPassword nodeCnf
+    putStrLn $ "shub"
+    -- let xPriv' = A.String $ DT.pack xPrivKey'
+    -- let net = bitcoinNetwork nodeCnf
+    -- xPriv <- case parse Prelude.id . xPrvFromJSON net $ xPriv' of
+    --             A.Success k -> return k
+    --             A.Error e -> undefined
+    -- let testAddr = fst $ derivePathAddr (deriveXPubKey x) (Deriv :/ 44 :/ 1 :/ 1 :/0 :: SoftPath) 1
+    -- let nameAddr = fst $ derivePathAddr x (Deriv :/ 44 :/ 1 :/ 1 :/0 :: SoftPath) 1
+    -- let deriveXpub = derivePubPath (Deriv :/ 44 :/ 1 :/ 1 :/0 :: SoftPath) (deriveXPubKey xPriv)
+    -- let deriveXpriv = derivePath (Deriv :/ 44 :/ 1 :/ 1 :/0 :: SoftPath) xPriv
+    -- let nUtxoAddr = deriveAddr pubPath (fromIntegral 1)
+    -- let nUtxoSecKey = deriveAddr pubPath (fromIntegral 1)
+    -- putStrLn $ show $ addrToString net (fst nUtxoAddr)
     cfp <- doesFileExist certFP
     kfp <- doesFileExist keyFP
     csfp <- doesDirectoryExist csrFP
     unless (cfp && kfp && csfp) $ P.error "Error: Missing TLS certificate or keyfile"
-    runNode (nsk, fsk) nodeCnf bitcoinP2PEnv [certFP, keyFP, csrFP]
+    runNode (nsk, xPrivKey', fsk) nodeCnf bitcoinP2PEnv [certFP, keyFP, csrFP]
 
 defaultAdminUser :: IO ()
 defaultAdminUser = do

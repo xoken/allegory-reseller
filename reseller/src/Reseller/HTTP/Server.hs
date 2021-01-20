@@ -7,11 +7,13 @@ import Reseller.Env
 import Reseller.HTTP.Handler
 import Reseller.HTTP.Types (App(..))
 import Snap
+import Snap.Util.CORS
 
 appInit :: ResellerEnv -> SnapletInit App App
 appInit env =
     makeSnaplet "v1" "API's" Nothing $ do
         addRoutes apiRoutes
+        wrapSite (applyCORS defaultOptions)
         return $ App env
 
 apiRoutes :: [(B.ByteString, Handler App App ())]

@@ -21,6 +21,7 @@ import Data.Yaml
 import GHC.Generics
 import Network.Socket
 import Network.Xoken.Constants
+import Network.Xoken.Keys
 import Network.Xoken.Util
 import System.Logger
 
@@ -36,6 +37,7 @@ data NodeConfig =
         , tlsCertificateStorePath :: !FilePath
         , defaultPriceSats :: !Int
         , nameUtxoSecretKey :: !SecKey
+        , xPrivKey :: !String
         , fundUtxoSecretKey :: !SecKey
         , feeSatsCreate :: !Int
         , feeSatsTransfer :: !Int
