@@ -74,6 +74,7 @@ data NameOutpointResponse =
     NameOutpointResponse
         { forName :: [Int]
         , script :: String
+        , isConfirmed :: Bool
         , outPoint :: OutPoint'
         , isProducer :: Bool
         }
