@@ -63,7 +63,7 @@ pipeline {
                       sh 'docker exec -w /opt/work/allegory-reseller $(cat /tmp/reseller-ubuntu1804.cid) stack install  --local-bin-path  app '
                       sh 'docker cp $(cat /tmp/reseller-ubuntu1804.cid):/opt/work/allegory-reseller/app/reseller  ./allegory_reseller '
                       sh 'rm -f /tmp/reseller-ubuntu1804.cid'
-                      sh 'sha256sum ./reseller > Checksum_SHA256'
+                      sh 'sha256sum ./allegory_reseller > Checksum_SHA256'
                       sh 'zip allegory-reseller_"$(basename $(git symbolic-ref HEAD))"_ubuntu1804.zip allegory_reseller node-config.yaml README.md Checksum_SHA256 LICENSE LICENSE-AGPL LICENSE-OpenBSV '
                     }
               echo '****** Starting Ubuntu20.04 container ******'
@@ -80,7 +80,7 @@ pipeline {
                       sh 'docker exec -w /opt/work/allegory-reseller $(cat /tmp/reseller-ubuntu2004.cid) stack install  --local-bin-path  app '
                       sh 'docker cp $(cat /tmp/reseller-ubuntu2004.cid):/opt/work/allegory-reseller/app/reseller  ./allegory_reseller '
                       sh 'rm -f /tmp/reseller-ubuntu2004.cid'
-                      sh 'sha256sum ./reseller > Checksum_SHA256'
+                      sh 'sha256sum ./allegory_reseller > Checksum_SHA256'
                       sh 'zip allegory-reseller_"$(basename $(git symbolic-ref HEAD))"_ubuntu2004.zip allegory_reseller node-config.yaml README.md Checksum_SHA256 LICENSE LICENSE-AGPL LICENSE-OpenBSV '
                     }
               echo '****** Starting Arch Linux container ******'
@@ -97,7 +97,7 @@ pipeline {
                       sh 'docker exec -w /opt/work/allegory-reseller $(cat /tmp/reseller-archlinux.cid) env LD_PRELOAD=/usr/lib/libjemalloc.so.2 stack install  --local-bin-path  app '
                       sh 'docker cp $(cat /tmp/reseller-archlinux.cid):/opt/work/allegory-reseller/app/reseller ./allegory_reseller '
                       sh 'rm -f /tmp/reseller-archlinux.cid'
-                      sh 'sha256sum ./reseller > Checksum_SHA256'
+                      sh 'sha256sum ./allegory_reseller > Checksum_SHA256'
                       sh 'zip allegory-reseller_"$(basename $(git symbolic-ref HEAD))"_archlinux.zip allegory_reseller node-config.yaml README.md Checksum_SHA256 LICENSE LICENSE-AGPL LICENSE-OpenBSV '
                     }              
                     archiveArtifacts(artifacts: 'allegory-reseller/allegory-reseller*.zip', followSymlinks: true)
