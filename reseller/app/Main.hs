@@ -168,4 +168,9 @@ initReseller = do
 main :: IO ()
 main = do
     let pid = "/tmp/reseller.pid.0"
-    runDetached (Just pid) (ToFile "reseller.log") initReseller
+    runRes <- liftIO $ try $ runDetached (Just pid) (ToFile "reseller.log") initReseller
+    case runRes of
+        Left (e :: SomeException) -> do
+            putStrLn $ "Encountered fatal exception: " <> show e
+            putStrLn $ "Quitting..."
+        Right _ -> return ()
