@@ -43,8 +43,8 @@ import Crypto.Error
 import Crypto.KDF.Scrypt (Parameters(..), generate)
 import Crypto.Secp256k1
 import Data.Aeson as A
-import Data.Aeson.Types (parse)
 import Data.Aeson.Encoding (encodingToLazyByteString, fromEncoding)
+import Data.Aeson.Types (parse)
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
@@ -93,6 +93,7 @@ import NodeConfig as NC
 import Options.Applicative
 import Paths_reseller as P
 import Prelude as P
+import Prelude
 import Reseller.Env
 import Reseller.HTTP.Server
 import Reseller.HTTP.Types
@@ -109,7 +110,6 @@ import qualified System.Logger.Class as LGC
 import System.Posix.Daemon
 import System.Random
 import Text.Read (readMaybe)
-import Prelude
 
 data ConfigException
     = ConfigParseException
@@ -134,10 +134,9 @@ runThreads (nsk, xPrivKey, fsk) nodeConf bitcoinP2PEnv lg certPaths = do
              (nexaPassword nodeConf))
     putStrLn $ "Acquired Nexa session key: " <> (show sessionKey)
     let allegoryEnv = AllegoryEnv nsk xPrivKey fsk
-    let nexaEnv = NexaEnv sessionKey
-    let xknEnv = ResellerEnv lg bitcoinP2PEnv allegoryEnv nexaEnv
-    -- start HTTP endpoint
-    let snapConfig =
+        nexaEnv = NexaEnv sessionKey
+        xknEnv = ResellerEnv lg bitcoinP2PEnv allegoryEnv nexaEnv
+        snapConfig =
             Snap.defaultConfig & Snap.setSSLBind (DTE.encodeUtf8 $ DT.pack $ endPointHTTPSListenIP nodeConf) &
             Snap.setSSLPort (fromEnum $ endPointHTTPSListenPort nodeConf) &
             Snap.setSSLKey (certPaths !! 1) &
@@ -162,86 +161,19 @@ initReseller = do
     !nodeCnf <- readConfig "reseller-config.yaml"
     udc <- H.new
     let bitcoinP2PEnv = BitcoinP2P nodeCnf udc
-    let certFP = tlsCertificatePath nodeCnf
+        certFP = tlsCertificatePath nodeCnf
         keyFP = tlsKeyfilePath nodeCnf
         csrFP = tlsCertificateStorePath nodeCnf
-        host = nexaListenIP nodeCnf <> ":" <> (show $ nexaListenPort nodeCnf)
         nsk = nameUtxoSecretKey nodeCnf
-        xPrivKey' = NC.xPrivKey nodeCnf
         fsk = fundUtxoSecretKey nodeCnf
-        user = nexaUsername nodeCnf
-        pass = nexaPassword nodeCnf
-    putStrLn $ "shub"
-    -- let xPriv' = A.String $ DT.pack xPrivKey'
-    -- let net = bitcoinNetwork nodeCnf
-    -- xPriv <- case parse Prelude.id . xPrvFromJSON net $ xPriv' of
-    --             A.Success k -> return k
-    --             A.Error e -> undefined
-    -- let testAddr = fst $ derivePathAddr (deriveXPubKey x) (Deriv :/ 44 :/ 1 :/ 1 :/0 :: SoftPath) 1
-    -- let nameAddr = fst $ derivePathAddr x (Deriv :/ 44 :/ 1 :/ 1 :/0 :: SoftPath) 1
-    -- let deriveXpub = derivePubPath (Deriv :/ 44 :/ 1 :/ 1 :/0 :: SoftPath) (deriveXPubKey xPriv)
-    -- let deriveXpriv = derivePath (Deriv :/ 44 :/ 1 :/ 1 :/0 :: SoftPath) xPriv
-    -- let nUtxoAddr = deriveAddr pubPath (fromIntegral 1)
-    -- let nUtxoSecKey = deriveAddr pubPath (fromIntegral 1)
-    -- putStrLn $ show $ addrToString net (fst nUtxoAddr)
+        xpk = NC.xPrivKey nodeCnf
     cfp <- doesFileExist certFP
     kfp <- doesFileExist keyFP
     csfp <- doesDirectoryExist csrFP
     unless (cfp && kfp && csfp) $ P.error "Error: Missing TLS certificate or keyfile"
-    runNode (nsk, xPrivKey', fsk) nodeCnf bitcoinP2PEnv [certFP, keyFP, csrFP]
-
-defaultAdminUser :: IO ()
-defaultAdminUser = do
-    op <- DL.getValue (DTE.encodeUtf8 "admin")
-    putStrLn $ "Starting Reseller"
-    case op of
-        Just _ -> return ()
-        Nothing -> do
-            tm <- liftIO $ getCurrentTime
-            usr <-
-                addNewUser
-                    "admin"
-                    "default"
-                    "user"
-                    ""
-                    (Just ["admin"])
-                    (Just 100000000)
-                    (Just (addUTCTime (nominalDay * 365) tm))
-            putStrLn $ "******************************************************************* "
-            putStrLn $ "  Creating default Admin user!"
-            putStrLn $ "  Please note down admin password NOW, will not be shown again."
-            putStrLn $ "  Password : " ++ (aurPassword $ fromJust usr)
-            putStrLn $ "******************************************************************* "
-
-relaunch :: B.ByteString -> IO ()
-relaunch password =
-    forever $ do
-        let pid = "/tmp/nexa.pid.1"
-        running <- isRunning pid
-        if running
-            then threadDelay (30 * 1000000)
-            else do
-                runDetached (Just pid) (ToFile "nexa.log") initReseller
-                threadDelay (5000000)
+    runNode (nsk, xpk, fsk) nodeCnf bitcoinP2PEnv [certFP, keyFP, csrFP]
 
 main :: IO ()
 main = do
-    let pid = "/tmp/nexa.pid.0"
-    initReseller
-    --runDetached (Just pid) (ToFile "nexa.log") relaunch
-
-saltSize = 32
-
-paramN = 16 :: Word64
-
-paramR = 8
-
-paramP = 1
-
-paramKeyLen = 32
-
---Scrypt KDF
-deriveKey :: B.ByteString -> B.ByteString
-deriveKey password = generate params password ("" :: B.ByteString)
-  where
-    params = Parameters {n = paramN, r = paramR, p = paramP, outputLength = paramKeyLen}
+    let pid = "/tmp/reseller.pid.0"
+    runDetached (Just pid) (ToFile "reseller.log") initReseller
