@@ -97,7 +97,6 @@ import Prelude
 import Reseller.Env
 import Reseller.HTTP.Server
 import Reseller.HTTP.Types
-import Reseller.Service.User
 import qualified Snap as Snap
 import StmContainers.Map as SM
 import System.Directory (doesDirectoryExist, doesFileExist)
@@ -110,13 +109,6 @@ import qualified System.Logger.Class as LGC
 import System.Posix.Daemon
 import System.Random
 import Text.Read (readMaybe)
-
-data ConfigException
-    = ConfigParseException
-    | RandomSecretKeyException
-    deriving (Eq, Ord, Show)
-
-instance Exception ConfigException
 
 type HashTable k v = H.BasicHashTable k v
 

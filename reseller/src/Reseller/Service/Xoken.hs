@@ -57,20 +57,10 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     nodeCfg <- nodeConfig <$> getBitcoinP2P
     sessionKey <- nexaSessionKey <$> getNexaEnv
     nameSecKey <- nameUtxoSecKey <$> getAllegory
-    -- xPrivKey' <- xPrivKey <$> getAllegory
     fundSecKey <- fundUtxoSecKey <$> getAllegory
     let net = NC.bitcoinNetwork nodeCfg
     nexaAddr <- (\nc -> return $ NC.nexaListenIP nc <> ":" <> (show $ NC.nexaListenPort nc)) $ (nodeConfig bp2pEnv)
     res <- LE.try $ liftIO $ getProducer nexaAddr sessionKey nameArr isProducer
-    -- let xpub = A.String $ DT.pack nameXPubKey
-    -- x <- case parse Prelude.id . xPrvFromJSON net $ xpub of
-    --             Success k -> return k
-    --             A.Error e -> do
-    --                 err lg $ LG.msg $ "Error: Failed to decode xpub " <> (show e)
-    --                 throw KeyValueDBLookupException
-    -- let testAddr = fst $ derivePathAddr (deriveXPubKey x) (Deriv :/ 44 :/ 1 :/ 1 :/0 :: SoftPath) 1
-    -- debug lg $ LG.msg $ "Test Addr " <> (show testAddr)
-    -- let nameAddr = fst $ derivePathAddr x (Deriv :/ 44 :/ 1 :/ 1 :/0 :: SoftPath) 1
     producer <-
         case res of
             Left (e :: SomeException) -> do
@@ -78,7 +68,6 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                 throw e
             Right p' -> return p'
     let producerRoot = forName producer
-    -- let rqMileage = ((length nameArr) - (length producerRoot) -1) + 1
     let nameUtxoSats = NC.nameUtxoSatoshis nodeCfg
         rqFundingSats =
             (getFundingUtxoValue nameUtxoSats) *
@@ -208,7 +197,6 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
     let psatx = Tx 1 inputs outputs 0
     case signTx net psatx sigInputs [nameSecKey, fundSecKey] of
         Right tx -> return $ BSL.toStrict $ A.encode $ createTx' tx inputValues
-        --Right tx -> return $ BSL.toStrict $ A.encode $ tx
         Left err -> do
             liftIO $ print $ "error occured while signing tx: " <> show err
             return BC.empty

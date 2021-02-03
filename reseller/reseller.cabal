@@ -26,6 +26,7 @@ source-repository head
 executable reseller
   main-is: Main.hs
   other-modules:
+                 Allegory.Data
                  LevelDB
                  NodeConfig
                  Paths_reseller
@@ -34,7 +35,6 @@ executable reseller
                  Reseller.HTTP.Handler
                  Reseller.HTTP.Server
                  Reseller.HTTP.Types
-                 Reseller.Service.User
                  Reseller.Service.Xoken
                  Nexa
                  Nexa.Auth
