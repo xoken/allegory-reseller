@@ -36,9 +36,8 @@ data NodeConfig =
         , tlsKeyfilePath :: FilePath
         , tlsCertificateStorePath :: !FilePath
         , defaultPriceSats :: !Int
-        , nameUtxoSecretKey :: !SecKey
-        , xPrivKey :: !String
         , fundUtxoSecretKey :: !SecKey
+        , nameUtxoEncryptedSeed :: String
         , feeSatsCreate :: !Int
         , feeSatsTransfer :: !Int
         , nameUtxoSatoshis :: !Int

@@ -19,12 +19,25 @@ import Network.Xoken.Crypto.Hash
 import Network.Xoken.Util
 import Prelude
 import System.Random
+import Text.Show
 
 data ResellerException =
     KeyValueDBLookupException
     deriving (Show)
 
 instance Exception ResellerException
+
+data SeedDecryptException
+    = SeedDecodeException
+    | SecKeyException
+    | PassphraseException
+
+instance Exception SeedDecryptException
+
+instance Show SeedDecryptException where
+    show SeedDecodeException = "Failed to decode base64-encoded seed"
+    show SecKeyException = "Failed to parse secret key"
+    show PassphraseException = "Incorrect passphrase"
 
 maskAfter :: Int -> String -> String
 maskAfter n skey = (\x -> take n x ++ fmap (const '*') (drop n x)) skey

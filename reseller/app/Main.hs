@@ -42,6 +42,7 @@ import Crypto.Cipher.Types
 import Crypto.Error
 import Crypto.KDF.Scrypt (Parameters(..), generate)
 import Crypto.Secp256k1
+import Crypto.TripleSec as TS
 import Data.Aeson as A
 import Data.Aeson.Encoding (encodingToLazyByteString, fromEncoding)
 import Data.Aeson.Types (parse)
@@ -56,6 +57,7 @@ import qualified Data.ByteString.Lazy.Char8 as CL
 import Data.Char
 import Data.Default
 import Data.Default
+import Data.Either
 import Data.Function
 import Data.Functor.Identity
 import qualified Data.HashTable.IO as H
@@ -63,7 +65,6 @@ import Data.IORef
 import Data.Int
 import Data.List
 import Data.Map.Strict as M
-import Data.Maybe
 import Data.Maybe
 import Data.Pool
 import Data.Serialize as Serialize
@@ -94,6 +95,7 @@ import Options.Applicative
 import Paths_reseller as P
 import Prelude as P
 import Prelude
+import Reseller.Common
 import Reseller.Env
 import Reseller.HTTP.Server
 import Reseller.HTTP.Types
@@ -103,6 +105,7 @@ import System.Directory (doesDirectoryExist, doesFileExist)
 import System.Environment (getArgs)
 import System.Exit
 import System.FilePath
+import System.IO
 import System.IO.Unsafe
 import qualified System.Logger as LG
 import qualified System.Logger.Class as LGC
@@ -112,9 +115,8 @@ import Text.Read (readMaybe)
 
 type HashTable k v = H.BasicHashTable k v
 
-runThreads :: (SecKey, String, SecKey) -> NodeConfig -> BitcoinP2P -> LG.Logger -> [FilePath] -> IO ()
-runThreads (nsk, xPrivKey, fsk) nodeConf bitcoinP2PEnv lg certPaths = do
-    putStrLn $ "Acquiring Nexa session key for user " <> (nexaUsername nodeConf) <> "..."
+runThreads :: (SecKey, SecKey) -> NodeConfig -> BitcoinP2P -> LG.Logger -> [FilePath] -> IO ()
+runThreads (nsk, fsk) nodeConf bitcoinP2PEnv lg certPaths = do
     sessionKey <-
         (\k ->
              case k of
@@ -124,8 +126,7 @@ runThreads (nsk, xPrivKey, fsk) nodeConf bitcoinP2PEnv lg certPaths = do
              (nexaListenIP nodeConf <> ":" <> (show $ nexaListenPort nodeConf))
              (nexaUsername nodeConf)
              (nexaPassword nodeConf))
-    putStrLn $ "Acquired Nexa session key: " <> (show sessionKey)
-    let allegoryEnv = AllegoryEnv nsk xPrivKey fsk
+    let allegoryEnv = AllegoryEnv nsk fsk
         nexaEnv = NexaEnv sessionKey
         xknEnv = ResellerEnv lg bitcoinP2PEnv allegoryEnv nexaEnv
         snapConfig =
@@ -136,7 +137,7 @@ runThreads (nsk, xPrivKey, fsk) nodeConf bitcoinP2PEnv lg certPaths = do
             Snap.setSSLChainCert False
     Snap.serveSnaplet snapConfig (appInit xknEnv)
 
-runNode :: (SecKey, String, SecKey) -> NodeConfig -> BitcoinP2P -> [FilePath] -> IO ()
+runNode :: (SecKey, SecKey) -> NodeConfig -> BitcoinP2P -> [FilePath] -> IO ()
 runNode secKeys nodeConf bitcoinP2PEnv certPaths = do
     lg <-
         LG.new
@@ -147,30 +148,43 @@ runNode secKeys nodeConf bitcoinP2PEnv certPaths = do
 
 initReseller :: IO ()
 initReseller = do
-    putStrLn $ "--------------------------"
-    putStrLn $ "Starting Allegory Reseller"
-    putStrLn $ "--------------------------"
+    putStrLn $ "Starting Allegory Reseller..."
     !nodeCnf <- readConfig "reseller-config.yaml"
     udc <- H.new
     let bitcoinP2PEnv = BitcoinP2P nodeCnf udc
         certFP = tlsCertificatePath nodeCnf
         keyFP = tlsKeyfilePath nodeCnf
         csrFP = tlsCertificateStorePath nodeCnf
-        nsk = nameUtxoSecretKey nodeCnf
         fsk = fundUtxoSecretKey nodeCnf
-        xpk = NC.xPrivKey nodeCnf
+        seed = nameUtxoEncryptedSeed nodeCnf
     cfp <- doesFileExist certFP
     kfp <- doesFileExist keyFP
     csfp <- doesDirectoryExist csrFP
-    unless (cfp && kfp && csfp) $ P.error "Error: Missing TLS certificate or keyfile"
-    runNode (nsk, xpk, fsk) nodeCnf bitcoinP2PEnv [certFP, keyFP, csrFP]
-
-main :: IO ()
-main = do
+    unless (cfp && kfp && csfp) $ P.error "Error: Missing TLS certificate or keyfile. Quitting."
+    putStr "Enter nameUtxo secret key passphrase: " >> hFlush stdout
+    passphrase <- getLine
+    nsk <- decryptSeed seed passphrase
     let pid = "/tmp/reseller.pid.0"
-    runRes <- liftIO $ try $ runDetached (Just pid) (ToFile "reseller.log") initReseller
+    runRes <-
+        liftIO $
+        try $
+        runDetached (Just pid) (ToFile "reseller.log") $ runNode (nsk, fsk) nodeCnf bitcoinP2PEnv [certFP, keyFP, csrFP]
     case runRes of
         Left (e :: SomeException) -> do
             putStrLn $ "Encountered fatal exception: " <> show e
             putStrLn $ "Quitting..."
         Right _ -> return ()
+
+decryptSeed :: String -> String -> IO SecKey
+decryptSeed encryptedSeed passphrase = do
+    let b64Decoded = fromRight (throw SeedDecodeException) $ B64.decode $ C.pack encryptedSeed
+    decryptResult <- try $ TS.decryptIO (C.pack passphrase) b64Decoded
+    case decryptResult of
+        Left (e :: TripleSecException) -> throw PassphraseException
+        Right key ->
+            return $
+            fromMaybe (throw SecKeyException) $
+            secKey $ fromMaybe (throw SecKeyException) $ decodeHex $ DT.pack $ C.unpack key
+
+main :: IO ()
+main = initReseller

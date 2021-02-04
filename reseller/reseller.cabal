@@ -125,4 +125,5 @@ executable reseller
     , connection
     , http-client
     , http-client-tls
+    , triplesec
   default-language: Haskell2010

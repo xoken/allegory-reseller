@@ -1,0 +1,37 @@
+bitcoinNetwork : regtest
+
+logLevel : Debug
+
+logFileName : ./debug.log
+
+endPointHTTPSListenIP : 127.0.0.1
+
+endPointHTTPSListenPort : 9189
+
+tlsCertificatePath : ./example.crt
+
+tlsKeyfilePath : ./example.key
+
+tlsCertificateStorePath : .
+
+defaultPriceSats : 1000000
+
+nameUtxoEncryptedSeed :
+
+fundUtxoSecretKey : 
+
+feeSatsCreate : 4000
+
+feeSatsTransfer : 2000
+
+nameUtxoSatoshis : 5000
+
+nexaListenIP : 127.0.0.1
+
+nexaListenPort : 9091
+
+nexaUsername :
+
+nexaPassword :
+
+resellerUri :
