@@ -117,6 +117,11 @@ type HashTable k v = H.BasicHashTable k v
 
 runThreads :: (SecKey, SecKey) -> NodeConfig -> BitcoinP2P -> LG.Logger -> [FilePath] -> IO ()
 runThreads (nsk, fsk) nodeConf bitcoinP2PEnv lg certPaths = do
+    let addresses =
+            (fromJust . addrToString (NC.bitcoinNetwork nodeConf) . pubKeyAddr . derivePubKeyI . wrapSecKey True) <$>
+            [nsk, fsk]
+    P.putStrLn $ "nUTXO address: " <> (show $ addresses !! 0)
+    P.putStrLn $ "Funding address: " <> (show $ addresses !! 1)
     sessionKey <-
         (\k ->
              case k of
