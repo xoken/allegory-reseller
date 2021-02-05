@@ -115,9 +115,9 @@ data AddressOutputs =
         { address :: String
         , outputTxHash :: String
         , outputIndex :: Int
-        , txIndex :: Int
-        , blockHash :: String
-        , blockHeight :: Int
+        , txIndex :: Maybe Int
+        , blockHash :: Maybe String
+        , blockHeight :: Maybe Int
         , spendInfo :: Maybe SpendInfo
         , prevOutpoint :: [(OutPoint', Int32, Int64)]
         , value :: Int64

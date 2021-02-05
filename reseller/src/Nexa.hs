@@ -51,6 +51,7 @@ getFundingUtxos nexaAddr sk addr requiredSats cursor = do
     response <- liftIO $ nexaGetReq req (Just sk)
     case decode (responseBody response) :: Maybe GetUtxosByAddressResponse of
         Nothing -> do
+            debug lg $ LG.msg $ "<getFundingUtxos> Nexa response: " <> show response
             err lg $ LG.msg $ "Error: Failed to parse Nexa response for request '" <> req <> "'"
             throw ResponseParseException
         Just resp -> do
