@@ -309,8 +309,8 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
                         throw e
                     Right (RelayTxResponse res) ->
                         case res of
-                            False -> debug lg $ LG.msg $ "makeProducer: relayed transaction: " <> nameString
-                            True -> do
+                            True -> debug lg $ LG.msg $ "makeProducer: relayed transaction: " <> nameString
+                            False -> do
                                 err lg $ LG.msg $ show "[ERROR] Failed to relay intermediate transaction!"
                                 throw KeyValueDBLookupException
                 return (nextNameInput, nextFundInputs)
