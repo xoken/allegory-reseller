@@ -21,6 +21,7 @@ import Data.ByteString.Base64 as B64
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Lazy.Char8 as C
+import Data.Char (chr)
 import Data.List as L
 import Data.Maybe
 import Data.Serialize
@@ -229,7 +230,7 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
         return (nextNameInput, gotFundInputs)
     | otherwise = do
         lg <- getLogger
-        debug lg $ LG.msg $ "makeProducer: called for name: " <> (show name)
+        debug lg $ LG.msg $ "makeProducer: called for name: " <> (chr <$> name)
         (nameInput, fundInput) <- makeProducer (init name) gotFundInputs fromRoot rootOutpoint
         bp2pEnv <- getBitcoinP2P
         nodeCfg <- nodeConfig <$> getBitcoinP2P
@@ -237,8 +238,9 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
         nameSecKey <- nameUtxoSecKey <$> getAllegory
         fundSecKey <- fundUtxoSecKey <$> getAllegory
         nexaAddr <- (\nc -> return $ NC.nexaListenIP nc <> ":" <> (show $ NC.nexaListenPort nc)) $ (nodeConfig bp2pEnv)
-        debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": got keys & nexa endpoint " <> (show nexaAddr)
+        debug lg $ LG.msg $ "makeProducer: " <> (chr <$> name) <> ": got keys & nexa endpoint " <> (show nexaAddr)
         let net = NC.bitcoinNetwork nodeCfg
+            nameString = chr <$> name
             nameUtxoSats = NC.nameUtxoSatoshis nodeCfg
             nameAddr = pubKeyAddr $ derivePubKeyI $ wrapSecKey True $ nameSecKey
             nameScript = addressToScriptBS nameAddr
@@ -250,11 +252,11 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
                 (fromIntegral (getFundingUtxoValue nameUtxoSats))
         debug lg $
             LG.msg $
-            "makeProducer: " <> (show name) <> ": got addresses, scripts, remaining funding: " <> (show remFunding)
+            "makeProducer: " <> nameString <> ": got addresses, scripts, remaining funding: " <> (show remFunding)
         let ins =
                 ((\si -> TxIn (sigInputOP si) nameScript 0xFFFFFFFF) $ nameInput) :
                 ((\si -> TxIn (sigInputOP si) fundScript 0xFFFFFFFF) <$> fundInput)
-        debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": got inputs: " <> (show ins)
+        debug lg $ LG.msg $ "makeProducer: " <> nameString <> ": got inputs: " <> (show ins)
         let al =
                 Allegory
                     1
@@ -272,12 +274,12 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
         let outs =
                 [TxOut 0 opRetScript] ++
                 L.map (\_ -> TxOut (fromIntegral nameUtxoSats) nameScript) [1, 2, 3] ++ [TxOut remFunding fundScript]
-        debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": got outputs: " <> (show outs)
+        debug lg $ LG.msg $ "makeProducer: " <> nameString <> ": got outputs: " <> (show outs)
         let sigInputs = nameInput : fundInput
         let psaTx = Tx 1 ins outs 0
         case signTx net psaTx sigInputs $ [nameSecKey] ++ (take (length fundInput) $ repeat fundSecKey) of
             Right tx -> do
-                debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": signed txn: " <> (show tx)
+                debug lg $ LG.msg $ "makeProducer: " <> nameString <> ": signed txn: " <> (show tx)
                 let nextFundInputs =
                         case remFunding of
                             0 -> []
@@ -296,12 +298,21 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
                             (OutPoint (txHash tx) (fromIntegral 2))
                             (setForkIdFlag sigHashAll)
                             Nothing
+                debug lg $
+                    LG.msg $
+                    "makeProducer: for name " <> nameString <> " relaying rawTx: " <>
+                    (BC.unpack . B64.encode . Data.Serialize.encode $ tx)
                 res <- LE.try $ liftIO $ relayTx nexaAddr sessionKey (Data.Serialize.encode tx)
                 case res of
                     Left (e :: SomeException) -> do
-                        debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": failed to relay txn: " <> (show e)
+                        debug lg $ LG.msg $ "makeProducer: " <> nameString <> ": failed to relay txn: " <> (show e)
                         throw e
-                    _ -> debug lg $ LG.msg $ "makeProducer: " <> (show name) <> ": relayed txn"
+                    Right (RelayTxResponse res) ->
+                        case res of
+                            False -> debug lg $ LG.msg $ "makeProducer: relayed transaction: " <> nameString
+                            True -> do
+                                err lg $ LG.msg $ show "[ERROR] Failed to relay intermediate transaction!"
+                                throw KeyValueDBLookupException
                 return (nextNameInput, nextFundInputs)
             Left e -> do
                 err lg $ LG.msg $ "Error: Failed to sign interim producer transaction: " <> (show e)
