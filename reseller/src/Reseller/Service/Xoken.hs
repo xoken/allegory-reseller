@@ -300,8 +300,10 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
                             Nothing
                 debug lg $
                     LG.msg $
-                    "makeProducer: for name " <> nameString <> " relaying rawTx: " <>
-                    (BC.unpack . B64.encode . Data.Serialize.encode $ tx)
+                    "makeProducer: for name " <> nameString <> " relaying rawTx (" <>
+                    (DT.unpack . txHashToHex $ txHash tx) <>
+                    "): " <>
+                    (BC.unpack . B16.encode . Data.Serialize.encode $ tx)
                 res <- LE.try $ liftIO $ relayTx nexaAddr sessionKey (Data.Serialize.encode tx)
                 case res of
                     Left (e :: SomeException) -> do
