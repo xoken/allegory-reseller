@@ -72,8 +72,8 @@ data ProxyProvider =
     ProxyProvider
         { service :: !String
         , mode :: !String
-        , endpoint :: !Endpoint
-        , registration :: !Registration
+        , publicKeySigning :: !String
+        , publicKeyAuthEncrypt :: !String
         }
     deriving (Show, Generic, Eq, Serialise)
 
@@ -87,18 +87,6 @@ data Endpoint =
     deriving (Show, Generic, Eq, Serialise)
 
 instance ToJSON Endpoint
-
-data Registration =
-    Registration
-        { addressCommitment :: !String
-        , utxoCommitment :: !String
-        , publicKeySigning :: !String
-        , publicKeyAuthEncrypt :: !String
-        , expiry :: !Int
-        }
-    deriving (Show, Generic, Eq, Serialise)
-
-instance ToJSON Registration
 
 frameOpReturn :: C.ByteString -> C.ByteString
 frameOpReturn opReturn = do
