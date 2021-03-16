@@ -99,5 +99,5 @@ getFundingUtxos nexaAddr sk addr requiredSats cursor = do
                 then do
                     debug lg $ LG.msg $ "<getFundingUtxos> address = " <> addr <> ": requesting next page of utxos..."
                     moreUtxos <- getFundingUtxos nexaAddr sk addr (requiredSats - gotSats) (nextCursor resp)
-                    return $ selectedUtxos ++ moreUtxos
+                    return $ nub $ selectedUtxos ++ moreUtxos
                 else return selectedUtxos
