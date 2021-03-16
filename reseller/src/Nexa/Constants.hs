@@ -43,7 +43,7 @@ utxosByAddressRequest nexaEndpoint address pageSize cursor =
             case cursor of
                 Nothing -> ""
                 Just c' -> "&cursor=" <> c'
-     in ep <> rq <> pg <> cu
+     in ep <> rq <> pg <> cu <> "&ascending=true"
 
 nexaReq :: NexaEndpoint -> L.ByteString -> String -> Maybe SessionKey -> IO (Response L.ByteString)
 nexaReq ep body addr sk = do
