@@ -168,27 +168,27 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
                               OwnerExtension
                                   (OwnerOutput (Index 2) (Just $ Endpoint "XokenP2P" buyerUri))
                                   (last nameArr) :
-                              if isProducer
-                                  then [ ProducerExtension
-                                             (ProducerOutput (Index 3) (Just $ Endpoint "XokenP2P" buyerUri))
-                                             (last nameArr)
-                                       ]
-                                  else []
+                              [ ProducerExtension
+                                    (ProducerOutput
+                                         (Index 3)
+                                         (Just $
+                                          Endpoint "XokenP2P" $
+                                          if isProducer
+                                              then buyerUri
+                                              else resellerUri))
+                                    (last nameArr)
+                              ]
                           opRetScript = frameOpReturn $ C.toStrict $ serialise $ Allegory 1 (init nameArr) action
-                          changeSats =
-                              totalEffectiveInputSats -
-                              (paySats +
-                               (if isProducer
-                                    then 2
-                                    else 1) *
-                               allegoryFeeSatsCreate)
+                          changeSats = totalEffectiveInputSats - (paySats + 2 * allegoryFeeSatsCreate)
                        in [ TxOut 0 opRetScript
                           , TxOut (fromIntegral nameUtxoSats) resellerNutxoScriptPubKey
                           , TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey
                           ] ++
-                          (if isProducer
-                               then [TxOut (fromIntegral nameUtxoSats) ownerScriptPubKey]
-                               else []) ++
+                          [ TxOut (fromIntegral nameUtxoSats) $
+                            if isProducer
+                                then ownerScriptPubKey
+                                else resellerNutxoScriptPubKey
+                          ] ++
                           [ TxOut (fromIntegral changeSats) changeScriptPubKey
                           , TxOut (fromIntegral paySats) resellerPaymentScriptPubKey
                           ]) ++
