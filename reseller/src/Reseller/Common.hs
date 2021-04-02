@@ -21,8 +21,9 @@ import Prelude
 import System.Random
 import Text.Show
 
-data ResellerException =
-    KeyValueDBLookupException
+data ResellerException
+    = KeyValueDBLookupException
+    | OutOfFundsException
     deriving (Show)
 
 instance Exception ResellerException

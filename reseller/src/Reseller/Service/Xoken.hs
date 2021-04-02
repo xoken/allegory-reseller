@@ -9,6 +9,7 @@ import Allegory.Data
 import Codec.Serialise
 import Control.Exception
 import qualified Control.Exception.Lifted as LE (try)
+import Control.Monad (when)
 import Control.Monad.Base
 import Control.Monad.IO.Class
 import Control.Monad.IO.Unlift
@@ -130,7 +131,10 @@ xGetPartiallySignedAllegoryTx nodeCnf payips (nameArr, isProducer) owner change 
         sigInputs = nameRoot : remFundInput
         remFunding =
             (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 remFundInput) - (getFundingUtxoValue nameUtxoSats)
-        inputValues =
+    when (remFunding < 0) $ do
+        err lg $ LG.msg $ BC.pack $ "[ERROR] Ran out of funding for purchase transaction for " ++ (chr <$> nameArr)
+        throw OutOfFundsException
+    let inputValues =
             [nameUtxoSats] ++
             (case remFunding of
                  0 -> []
@@ -250,6 +254,9 @@ makeProducer name gotFundInputs fromRoot rootOutpoint
             remFunding =
                 (foldl (\p q -> p + (fromIntegral $ sigInputValue q)) 0 fundInput) -
                 (fromIntegral (getFundingUtxoValue nameUtxoSats))
+        when (remFunding < 0) $ do
+            err lg $ LG.msg $ BC.pack $ "[ERROR] Ran out of funding for name " ++ (chr <$> name)
+            throw OutOfFundsException
         debug lg $
             LG.msg $
             "makeProducer: " <> nameString <> ": got addresses, scripts, remaining funding: " <> (show remFunding)
