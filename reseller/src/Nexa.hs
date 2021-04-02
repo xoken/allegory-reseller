@@ -5,6 +5,7 @@
 module Nexa where
 
 import Control.Exception
+import Control.Monad (when)
 import Control.Monad.IO.Unlift
 import Data.Aeson
 import qualified Data.ByteString.Char8 as BC
@@ -95,6 +96,9 @@ getFundingUtxos nexaAddr sk addr requiredSats cursor = do
                 (show gotSats) <>
                 ", required value: " <>
                 (show requiredSats)
+            when (null fundingUtxos) $ do
+                err lg $ LG.msg $ BC.pack "[ERROR] Insufficient funding to complete name purchase!"
+                throw EmptyResponseException
             if (length selectedUtxos == length fundingUtxos) && (gotSats < requiredSats)
                 then do
                     debug lg $ LG.msg $ "<getFundingUtxos> address = " <> addr <> ": requesting next page of utxos..."

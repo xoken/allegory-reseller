@@ -14,9 +14,9 @@ import Data.ByteString.Base64 as B64
 import Data.ByteString.Char8 as B8 (pack)
 import Data.Hashable
 import Data.Int
-import Data.Word
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import Data.Word
 import GHC.Generics
 import Network.Xoken.Transaction
 
@@ -24,6 +24,7 @@ data NexaException
     = AuthException
     | ResponseParseException
     | ServerException
+    | EmptyResponseException
     deriving (Show)
 
 instance Exception NexaException
@@ -159,10 +160,10 @@ data Tx' =
 
 data TxIn' =
     TxIn'
-        { prevOutput   :: !OutPoint
-        , scriptInput  :: !ByteString
+        { prevOutput :: !OutPoint
+        , scriptInput :: !ByteString
         , txInSequence :: !Word32
-        , value        :: !Word64
+        , value :: !Word64
         }
     deriving (Eq, Show, Read, Ord, Generic, Hashable, Serialise)
 
@@ -170,4 +171,4 @@ instance ToJSON Tx' where
     toJSON (Tx' v i o l) = object ["version" .= v, "ins" .= i, "outs" .= o, "locktime" .= l]
 
 instance ToJSON TxIn' where
-    toJSON (TxIn' op scr seq val) = object ["outpoint" .= op, "script" .= scr, "sequence" .= seq , "value" .= val]
+    toJSON (TxIn' op scr seq val) = object ["outpoint" .= op, "script" .= scr, "sequence" .= seq, "value" .= val]
